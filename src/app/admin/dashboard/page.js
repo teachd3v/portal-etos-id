@@ -7,14 +7,13 @@ import LogoutButton from '@/app/dashboard/LogoutButton';
 import AdminClient from './AdminClient';
 import { getStatusPeriode } from '@/lib/utils';
 
-// Fungsi bantuan untuk menghitung rata-rata dari sekumpulan kolom
 const getAvg = (row, cols) => {
   let sum = 0; let count = 0;
   cols.forEach(col => {
     const val = parseFloat(row.get(col));
     if (!isNaN(val)) { sum += val; count += 1; }
   });
-  return count > 0 ? (sum / count) : 0;
+  return count > 0 ? parseFloat((sum / count).toFixed(4)) : 0;
 };
 
 export default async function AdminDashboard() {
@@ -30,63 +29,61 @@ export default async function AdminDashboard() {
 
   const { periode } = getStatusPeriode();
 
-  // Tarik Semua Data
-  const sheetPM = await getGoogleSheet('Users_PM');
-  const rowsPM = await sheetPM.getRows();
-  
-  const sheetResPM = await getGoogleSheet('Response_PM');
-  const rowsResPM = await sheetResPM.getRows();
+  // Tarik Semua Data Sekaligus
+  const [sheetPM, sheetResPM, sheetResFasil] = await Promise.all([
+    getGoogleSheet('Users_PM'),
+    getGoogleSheet('Response_PM'),
+    getGoogleSheet('Response_Fasil'),
+  ]);
+  const [rowsPM, rowsResPM, rowsResFasil] = await Promise.all([
+    sheetPM.getRows(),
+    sheetResPM.getRows(),
+    sheetResFasil.getRows(),
+  ]);
 
-  const sheetResFasil = await getGoogleSheet('Response_Fasil');
-  const rowsResFasil = await sheetResFasil.getRows();
+  // 1. Master PM
+  const allPM = rowsPM.map(row => ({
+    id: row.get('ID'),
+    nama: row.get('Nama_Etoser'),
+    angkatan: row.get('Angkatan') || '-',
+    wilayah: row.get('Wilayah') || '-',
+    tahun_pembinaan: row.get('Tahun_Pembinaan') || '-',
+  }));
 
-  // 1. Ambil Laporan PM khusus bulan ini
-  const responsePM_BulanIni = rowsResPM.filter(r => r.get('Bulan_Laporan') === periode);
+  // 2. Semua laporan PM (semua periode) dengan skor variabel sudah dihitung
+  const allResPM = rowsResPM.map(row => ({
+    id_etoser: row.get('ID_Etoser'),
+    bulan_laporan: row.get('Bulan_Laporan'),
+    pm_int:  getAvg(row, ['A1_Skor','A2_Skor','A3_Skor','A4_Skor','A5_Skor','A6_Skor','A7_Skor','A8_Skor','A9_Skor','A10_Skor']),
+    pm_prof: getAvg(row, ['B1_Skor','B2_Skor','B3_Skor','B4_Skor','B5_Skor','B6_Skor']),
+    pm_trans: getAvg(row, ['C1_Skor','C2_Skor','C3_Skor','C4_Skor']),
+  }));
 
-  // 2. KONSOLIDASI DATA (Menggabungkan Nilai PM & Fasil ke dalam 1 Objek per Anak)
-  const mergedData = rowsPM.map(pm => {
-    const id = pm.get('ID');
-    const resPM = responsePM_BulanIni.find(r => r.get('ID_Etoser') === id);
-    // Ambil evaluasi fasil terbaru untuk anak ini
-    const resFasil = rowsResFasil.filter(r => r.get('ID_Etoser_Dinilai') === id).pop(); 
-
-    // Kalkulasi Skor PM (Rata-rata per variabel)
-    let pm_int = 0, pm_prof = 0, pm_trans = 0;
-    if (resPM) {
-      pm_int = getAvg(resPM, ['A1_Skor','A2_Skor','A3_Skor','A4_Skor','A5_Skor','A6_Skor','A7_Skor','A8_Skor','A9_Skor','A10_Skor']);
-      pm_prof = getAvg(resPM, ['B1_Skor','B2_Skor','B3_Skor','B4_Skor','B5_Skor','B6_Skor']);
-      pm_trans = getAvg(resPM, ['C1_Skor','C2_Skor','C3_Skor','C4_Skor']);
-    }
-
-    // Kalkulasi Skor Fasil
-    let fasil_int = 0, fasil_prof = 0, fasil_trans = 0;
-    if (resFasil) {
-      fasil_int = getAvg(resFasil, ['Skor_Integritas_Adab', 'Skor_Integritas_Ibadah', 'Skor_Komitmen_Pembinaan']);
-      fasil_prof = parseFloat(resFasil.get('Skor_Profesional')) || 0;
-      fasil_trans = parseFloat(resFasil.get('Skor_Transformatif')) || 0;
-    }
-
+  // 3. Semua evaluasi fasil dengan periode diturunkan dari Timestamp
+  const allResFasil = rowsResFasil.map(row => {
+    const ts = row.get('Timestamp') || '';
+    const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const periode_fasil = match ? `${match[2].padStart(2, '0')}-${match[3]}` : '';
     return {
-      id: id,
-      nama: pm.get('Nama_Etoser'),
-      angkatan: pm.get('Angkatan'),
-      wilayah: pm.get('Wilayah'),
-      tahun_pembinaan: pm.get('Tahun_Pembinaan'),
-      
-      status_lapor_pm: !!resPM,
-      status_dinilai_fasil: !!resFasil,
-      rekomendasi: resFasil ? resFasil.get('Kesimpulan_Rekomendasi') : 'Belum Dievaluasi',
-      
-      // Skor Mentah (Skala 4)
-      pm_int, pm_prof, pm_trans,
-      fasil_int, fasil_prof, fasil_trans,
-
-      // Skor Gabungan (Akumulasi 50% PM + 50% Fasil). Jika salah satu kosong, pakai yang ada.
-      total_int: (pm_int && fasil_int) ? (pm_int + fasil_int)/2 : (pm_int || fasil_int),
-      total_prof: (pm_prof && fasil_prof) ? (pm_prof + fasil_prof)/2 : (pm_prof || fasil_prof),
-      total_trans: (pm_trans && fasil_trans) ? (pm_trans + fasil_trans)/2 : (pm_trans || fasil_trans),
+      id_etoser_dinilai: row.get('ID_Etoser_Dinilai'),
+      periode_fasil,
+      fasil_int:         parseFloat(row.get('Skor_Integritas'))  || 0,
+      fasil_prof:        parseFloat(row.get('Skor_Profesional')) || 0,
+      fasil_kontributif: parseFloat(row.get('Skor_Kontributif')) || 0,
+      fasil_trans:       parseFloat(row.get('Skor_Transformatif')) || 0,
+      rekomendasi:       row.get('Kesimpulan_Rekomendasi') || 'Belum Dievaluasi',
+      total_poin:        parseInt(row.get('Total_Poin')) || 0,
     };
   });
+
+  // 4. Daftar periode unik dari laporan PM, diurutkan kronologis
+  const availablePeriodes = [...new Set(allResPM.map(r => r.bulan_laporan))]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const [mA, yA] = a.split('-');
+      const [mB, yB] = b.split('-');
+      return (parseInt(yA) * 12 + parseInt(mA)) - (parseInt(yB) * 12 + parseInt(mB));
+    });
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -98,8 +95,14 @@ export default async function AdminDashboard() {
           </div>
           <LogoutButton />
         </div>
-        
-        <AdminClient periodeAktif={periode} mergedData={mergedData} />
+
+        <AdminClient
+          periodeAktif={periode}
+          allPM={allPM}
+          allResPM={allResPM}
+          allResFasil={allResFasil}
+          availablePeriodes={availablePeriodes}
+        />
       </div>
     </div>
   );

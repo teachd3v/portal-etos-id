@@ -24,17 +24,26 @@ export default async function DashboardFasil() {
   // 2. Cek Status Periode (Jendela Waktu Tgl 25 - 7)
   const { statusForm, pesanStatus, periode } = getStatusPeriode();
 
-  // 3. Tarik Data Base PM & Data Laporan Masuk
+  // 3. Ambil Relasi_PM dari Users_Fasil (daftar ID PM yang boleh dinilai fasil ini)
+  let relasiPMList = [];
+  try {
+    const sheetFasil = await getGoogleSheet('Users_Fasil');
+    const rowsFasil = await sheetFasil.getRows();
+    const fasilRow = rowsFasil.find(r => r.get('ID_Fasil') === user.id);
+    const relasiPM = fasilRow?.get('Relasi_PM') || '';
+    relasiPMList = relasiPM ? relasiPM.split(',').map(s => s.trim()).filter(Boolean) : [];
+  } catch (e) {
+    console.error("Gagal menarik Relasi_PM dari Users_Fasil", e);
+  }
+
+  // 4. Tarik Data Base PM & Data Laporan Masuk
   const sheetPM = await getGoogleSheet('Users_PM');
   const rowsPM = await sheetPM.getRows();
 
   let submittedPMIds = new Set();
-  
   try {
-    // Cek sheet laporan PM untuk periode BULAN INI saja
     const sheetResponse = await getGoogleSheet('Response_PM');
     const rowsResponse = await sheetResponse.getRows();
-    
     rowsResponse.forEach(row => {
       if (row.get('Bulan_Laporan') === periode) {
         submittedPMIds.add(row.get('ID_Etoser'));
@@ -44,17 +53,61 @@ export default async function DashboardFasil() {
     console.error("Gagal menarik Response_PM", e);
   }
 
-  // 4. Filter PM sesuai wilayah binaan & injeksi status "sudah_lapor"
+  // 4b. Cek PM mana saja yang sudah dinilai oleh fasil ini di periode saat ini
+  let evaluatedPMIds = new Set();
+  try {
+    const sheetResFasil = await getGoogleSheet('Response_Fasil');
+    const rowsResFasil = await sheetResFasil.getRows();
+    const [periodeMonth, periodeYear] = periode.split('-'); // "03", "2026"
+
+    rowsResFasil.forEach(row => {
+      if (row.get('ID_Fasil') !== user.id) return;
+      // Pakai regex untuk ekstrak tanggal dari format id-ID yang bisa berupa:
+      // "18/3/2026 14.30.00" atau "18/3/2026, 14.30.00"
+      const ts = row.get('Timestamp') || '';
+      const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (match) {
+        const tsMonth = match[2].padStart(2, '0'); // match[2] = bulan
+        const tsYear = match[3];                   // match[3] = tahun
+        if (tsMonth === periodeMonth && tsYear === periodeYear) {
+          evaluatedPMIds.add(row.get('ID_Etoser_Dinilai'));
+        }
+      }
+    });
+  } catch (e) {
+    console.error("Gagal menarik Response_Fasil", e);
+  }
+
+  // 5. Filter PM berdasarkan Relasi_PM (jika ada), fallback ke wilayah
   const listPM = rowsPM
-    .filter(row => row.get('Wilayah') === user.wilayah)
+    .filter(row => {
+      const pmId = row.get('ID');
+      if (relasiPMList.length > 0) return relasiPMList.includes(pmId);
+      return row.get('Wilayah') === user.wilayah;
+    })
     .map(row => ({
       id: row.get('ID'),
       nama: row.get('Nama_Etoser'),
       angkatan: row.get('Angkatan'),
       tahun_pembinaan: row.get('Tahun_Pembinaan'),
-      // True jika ID anak ini ada di dalam Set laporan bulan ini
-      sudah_lapor: submittedPMIds.has(row.get('ID')) 
+      sudah_lapor: submittedPMIds.has(row.get('ID')),
+      sudah_dinilai: evaluatedPMIds.has(row.get('ID')),
     }));
+
+  // 6. Tarik Data Instrumen Sanksi
+  let dataSanksi = [];
+  try {
+    const sheetSanksi = await getGoogleSheet('Sanksi');
+    const rowsSanksi = await sheetSanksi.getRows();
+    dataSanksi = rowsSanksi.map(row => ({
+      kategori: row.get('Kategori') || '',
+      detail: row.get('Detail_Pelanggaran') || '',
+      masa_perbaikan: row.get('Masa_Perbaikan') || '',
+      poin: parseInt(row.get('Poin')) || 0,
+    })).filter(s => s.kategori && s.detail);
+  } catch (e) {
+    console.error("Gagal menarik data Sanksi", e);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -76,11 +129,12 @@ export default async function DashboardFasil() {
         </div>
 
         {/* Komponen Interaktif & Logic Penguncian dilempar ke Client */}
-        <FasilClient 
-          user={user} 
-          listPM={listPM} 
-          statusForm={statusForm} 
+        <FasilClient
+          user={user}
+          listPM={listPM}
+          statusForm={statusForm}
           pesanStatus={pesanStatus}
+          dataSanksi={dataSanksi}
         />
       </div>
     </div>

@@ -13,6 +13,7 @@ const StarRating = ({ kode, jenisSkala, currentValue, onChange }) => {
       case 'Frekuensi': return ['Tidak Pernah', 'Jarang', 'Sering', 'Selalu'];
       case 'Intensitas': return ['Tidak Ada', 'Rendah (1x)', 'Sedang (2-3x)', 'Tinggi (>3x)'];
       case 'Persetujuan': return ['Sangat Tidak Setuju', 'Tidak Setuju', 'Setuju', 'Sangat Setuju'];
+      case 'Kemampuan': return ['Tidak Mampu', 'Mampu', 'Sangat Mampu', 'Luar Biasa'];
       default: return ['Skor 1', 'Skor 2', 'Skor 3', 'Skor 4'];
     }
   };
@@ -136,7 +137,7 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white border rounded-xl p-4 md:p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Instrumen Evaluasi</h2>
+          <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Jawablah pernyataan berikut berdasarkan apa yang kamu lakukan/rasakan DALAM SATU BULAN TERAKHIR</h2>
           
           {instrumen.map((item) => {
             const skorSaatIni = jawaban[item.kode]?.skor || 0;
