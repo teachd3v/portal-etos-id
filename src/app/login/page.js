@@ -18,32 +18,34 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, password }),
-      });
+      const [res] = await Promise.all([
+        fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, password }),
+        }),
+        new Promise(r => setTimeout(r, 1200)) // Jeda buatan 1.2 detik agar user tau proses sedang berjalan
+      ]);
 
       const data = await res.json();
 
       if (res.ok) {
-        // Redirect berdasarkan role
-        if (data.role === 'PM') {
-          router.push('/dashboard');
-        } else if (data.role === 'Fasilitator') {
-          router.push('/fasil/dashboard');
-        } else if (data.role === 'Admin') {
-          router.push('/admin/dashboard'); // Tambahan untuk admin
-        }
+        setLoading(true); // Keep loading state
+        setSuccess(true); // New state to show redirecting
+        if (data.role === 'PM') router.push('/dashboard');
+        else if (data.role === 'Fasilitator') router.push('/fasil/dashboard');
+        else if (data.role === 'Admin') router.push('/admin/dashboard'); 
       } else {
         setError(data.message);
+        setLoading(false);
       }
-    } catch (err) {
+    } catch {
       setError('Gagal terhubung ke server');
-    } finally {
       setLoading(false);
     }
   };
+
+  const [success, setSuccess] = useState(false);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -67,9 +69,10 @@ export default function LoginPage() {
             <input
               type="text"
               required
+              disabled={loading}
               value={id}
               onChange={(e) => setId(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-gray-900 bg-gray-50/50 placeholder:text-gray-400 font-semibold"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-gray-900 bg-gray-50/50 placeholder:text-gray-400 font-semibold disabled:opacity-50"
               placeholder="Contoh: E2025089"
             />
           </div>
@@ -81,9 +84,10 @@ export default function LoginPage() {
             <input
               type="password"
               required
+              disabled={loading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-gray-900 bg-gray-50/50 placeholder:text-gray-400 font-semibold tracking-wider"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-gray-900 bg-gray-50/50 placeholder:text-gray-400 font-semibold tracking-wider disabled:opacity-50"
               placeholder="••••••••"
             />
           </div>
@@ -91,10 +95,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 mt-2"
+            className={`w-full font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 mt-2 ${
+              success ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-            {loading ? 'Memproses...' : 'Masuk Dashboard'}
+            {success ? 'Berhasil! Mengalihkan...' : loading ? 'Memproses Authentikasi...' : 'Masuk Dashboard'}
           </button>
         </form>
         

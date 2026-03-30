@@ -33,7 +33,6 @@ export function getStatusPeriode() {
 
   const periodeStr = `${String(targetBulanLaporan).padStart(2, '0')}-${targetTahunLaporan}`;
 
-  status = 'OPEN'; // DIBUKA PAKSA UNTUK UJI COBA
   return {
     statusForm: 'OPEN',
     pesanStatus: pesan,
