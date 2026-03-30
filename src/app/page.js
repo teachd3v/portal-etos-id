@@ -1,6 +1,6 @@
 // src/app/page.js
 import Link from 'next/link';
-import { GraduationCap, UserCheck, PieChart, ArrowRight } from 'lucide-react';
+import { GraduationCap, UserCheck, PieChart, ArrowRight, ClipboardList } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -29,7 +29,7 @@ export default function Home() {
         </div>
 
         {/* Cards Section (Penjelasan Peran) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 text-left animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 text-left animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150">
           
           {/* Card PM */}
           <div className="bg-white/80 backdrop-blur-sm p-8 rounded-3xl shadow-sm border border-white hover:shadow-md transition-shadow">
@@ -61,6 +61,17 @@ export default function Home() {
             <h3 className="text-xl font-bold text-gray-900 mb-3">Executive Dashboard</h3>
             <p className="text-gray-500 text-sm font-medium leading-relaxed">
               Pusat komando Admin untuk memonitoring kepatuhan pelaporan, mendeteksi *gap analysis*, dan memantau PM berisiko.
+            </p>
+          </div>
+
+          {/* Card Self-Report Fasil */}
+          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-3xl shadow-sm border border-white hover:shadow-md transition-shadow">
+            <div className="bg-indigo-100 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 text-indigo-600 shadow-inner">
+              <ClipboardList className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-3">Self-Report Fasil</h3>
+            <p className="text-gray-500 text-sm font-medium leading-relaxed">
+              Pengisian laporan capaian kinerja mandiri bulanan bagi Fasilitator Wilayah yang mencakup peran sebagai Team Leader, Adminkeu, dan Double Job.
             </p>
           </div>
 

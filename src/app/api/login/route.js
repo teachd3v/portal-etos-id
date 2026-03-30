@@ -52,7 +52,8 @@ export async function POST(req) {
           id: foundFasil.get('ID_Fasil'),
           nama: foundFasil.get('Nama_Fasil'),
           wilayah: foundFasil.get('Wilayah_Binaan'),
-          role: 'Fasilitator'
+          role: 'Fasilitator',
+          role_fasil: foundFasil.get('Role') || 'Team Leader',
         };
       }
     }

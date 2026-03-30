@@ -1,7 +1,8 @@
 // src/app/fasil/dashboard/FasilClient.js
 'use client';
 import { useState } from 'react';
-import { Loader2, CheckCircle2, UserCheck, ChevronRight, Star, AlertTriangle, Lock, Plus, Trash2, BadgeCheck } from 'lucide-react';
+import { Loader2, CheckCircle2, UserCheck, ChevronRight, Star, AlertTriangle, Lock, Plus, Trash2, BadgeCheck, ClipboardList } from 'lucide-react';
+import SelfReportFasilClient from './SelfReportFasilClient';
 
 // --- KOMPONEN BINTANG INTERAKTIF FASIL ---
 const FasilStarRating = ({ kode, currentValue, onChange }) => {
@@ -41,7 +42,8 @@ const indikatorFasil = [
   { kode: 'Transformatif', label: 'Transformatif', desc: 'PM bersikap terbuka terhadap feedback (saran/kritik), tangguh mencari solusi saat menghadapi kendala, dan menunjukkan perbaikan kualitas diri.' },
 ];
 
-export default function FasilClient({ user, listPM, statusForm, pesanStatus, dataSanksi = [] }) {
+export default function FasilClient({ user, listPM, statusForm, pesanStatus, dataSanksi = [], instrumenFasil = [], sudahSelfReport, statusFormFasil, pesanStatusFasil, periodeFasil }) {
+  const [activeTab, setActiveTab] = useState('peer_review');
   const [selectedPM, setSelectedPM] = useState(null);
   const [jawaban, setJawaban] = useState({});
   const [rekomendasi, setRekomendasi] = useState('');
@@ -136,6 +138,37 @@ export default function FasilClient({ user, listPM, statusForm, pesanStatus, dat
   };
 
   return (
+    <div>
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-6 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 w-fit">
+        <button
+          onClick={() => setActiveTab('peer_review')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'peer_review' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" /> Peer Review PM
+        </button>
+        <button
+          onClick={() => setActiveTab('self_report')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'self_report' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" /> Laporan Bulanan Fasil
+        </button>
+      </div>
+
+      {activeTab === 'self_report' ? (
+        <SelfReportFasilClient
+          user={user}
+          instrumenFasil={instrumenFasil}
+          sudahSelfReport={sudahSelfReport}
+          statusForm={statusFormFasil}
+          pesanStatus={pesanStatusFasil}
+          periode={periodeFasil}
+        />
+      ) : (
     <div className="grid md:grid-cols-3 gap-6">
 
       {/* --- KOLOM KIRI: DAFTAR PM --- */}
@@ -398,6 +431,8 @@ export default function FasilClient({ user, listPM, statusForm, pesanStatus, dat
           </form>
         )}
       </div>
+    </div>
+      )}
     </div>
   );
 }

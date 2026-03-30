@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { redirect } from 'next/navigation';
 import { getGoogleSheet } from '@/lib/googleSheets';
-import { getStatusPeriode } from '@/lib/utils';
+import { getStatusPeriode, getStatusPeriodeFasil } from '@/lib/utils';
 import LogoutButton from '@/app/dashboard/LogoutButton';
 import FasilClient from './FasilClient';
 
@@ -23,6 +23,9 @@ export default async function DashboardFasil() {
 
   // 2. Cek Status Periode (Jendela Waktu Tgl 25 - 7)
   const { statusForm, pesanStatus, periode } = getStatusPeriode();
+
+  // 2b. Cek Status Periode Self-Report Fasil (Jendela Waktu Tgl 1 - 10)
+  const { statusForm: statusFormFasil, pesanStatus: pesanStatusFasil, periode: periodeFasil } = getStatusPeriodeFasil();
 
   // 3. Ambil Relasi_PM dari Users_Fasil (daftar ID PM yang boleh dinilai fasil ini)
   let relasiPMList = [];
@@ -109,6 +112,37 @@ export default async function DashboardFasil() {
     console.error("Gagal menarik data Sanksi", e);
   }
 
+  // 7. Ambil Instrumen_Fasil (filtered by Variabel = role_fasil)
+  let instrumenFasil = [];
+  const effectiveRoleFasil = user.role_fasil || 'Team Leader';
+  try {
+    const sheetInstrumenFasil = await getGoogleSheet('Instrumen_Fasil');
+    const rowsInstrumenFasil = await sheetInstrumenFasil.getRows();
+    instrumenFasil = rowsInstrumenFasil
+      .filter(row => row.get('Variabel') === effectiveRoleFasil)
+      .map(row => ({
+        variabel: row.get('Variabel') || '',
+        kode: row.get('Kode') || '',
+        jenisSkala: row.get('Jenis_Skala') || '',
+        item: row.get('Item_Pernyataan') || '',
+        validasi: row.get('Pertanyaan_Validasi') || '',
+      }));
+  } catch (e) {
+    console.error("Gagal menarik Instrumen_Fasil", e);
+  }
+
+  // 8. Cek apakah fasil sudah self-report di periode ini
+  let sudahSelfReport = false;
+  try {
+    const sheetSR = await getGoogleSheet('Response_Self_Report_Fasil');
+    const rowsSR = await sheetSR.getRows();
+    sudahSelfReport = rowsSR.some(
+      row => row.get('ID_Fasil') === user.id && row.get('Bulan_Laporan') === periodeFasil
+    );
+  } catch (e) {
+    console.error("Gagal menarik Response_Self_Report_Fasil", e);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
@@ -135,6 +169,11 @@ export default async function DashboardFasil() {
           statusForm={statusForm}
           pesanStatus={pesanStatus}
           dataSanksi={dataSanksi}
+          instrumenFasil={instrumenFasil}
+          sudahSelfReport={sudahSelfReport}
+          statusFormFasil={statusFormFasil}
+          pesanStatusFasil={pesanStatusFasil}
+          periodeFasil={periodeFasil}
         />
       </div>
     </div>

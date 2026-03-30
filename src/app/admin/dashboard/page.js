@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { getGoogleSheet } from '@/lib/googleSheets';
 import LogoutButton from '@/app/dashboard/LogoutButton';
 import AdminClient from './AdminClient';
-import { getStatusPeriode } from '@/lib/utils';
+import { getStatusPeriode, getStatusPeriodeFasil } from '@/lib/utils';
 
 const getAvg = (row, cols) => {
   let sum = 0; let count = 0;
@@ -25,20 +25,25 @@ export default async function AdminDashboard() {
   try {
     user = jwt.verify(token, process.env.JWT_SECRET);
     if (user.role !== 'Admin') redirect('/login');
-  } catch (error) { redirect('/login'); }
+  } catch { redirect('/login'); }
 
   const { periode } = getStatusPeriode();
+  const { periode: periodeFasil } = getStatusPeriodeFasil();
 
-  // Tarik Semua Data Sekaligus
-  const [sheetPM, sheetResPM, sheetResFasil] = await Promise.all([
+  // Tarik Semua Data Sekaligus (parallel)
+  const [sheetPM, sheetResPM, sheetResFasil, sheetFasil, sheetSRFasil] = await Promise.all([
     getGoogleSheet('Users_PM'),
     getGoogleSheet('Response_PM'),
     getGoogleSheet('Response_Fasil'),
+    getGoogleSheet('Users_Fasil'),
+    getGoogleSheet('Response_Self_Report_Fasil'),
   ]);
-  const [rowsPM, rowsResPM, rowsResFasil] = await Promise.all([
+  const [rowsPM, rowsResPM, rowsResFasil, rowsFasil, rowsSRFasil] = await Promise.all([
     sheetPM.getRows(),
     sheetResPM.getRows(),
     sheetResFasil.getRows(),
+    sheetFasil.getRows(),
+    sheetSRFasil.getRows(),
   ]);
 
   // 1. Master PM
@@ -65,6 +70,7 @@ export default async function AdminDashboard() {
     const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     const periode_fasil = match ? `${match[2].padStart(2, '0')}-${match[3]}` : '';
     return {
+      id_fasil:          row.get('ID_Fasil'),
       id_etoser_dinilai: row.get('ID_Etoser_Dinilai'),
       periode_fasil,
       fasil_int:         parseFloat(row.get('Skor_Integritas'))  || 0,
@@ -85,6 +91,34 @@ export default async function AdminDashboard() {
       return (parseInt(yA) * 12 + parseInt(mA)) - (parseInt(yB) * 12 + parseInt(mB));
     });
 
+  // 5. Master Fasil
+  const allFasil = rowsFasil.map(row => ({
+    id: row.get('ID_Fasil'),
+    nama: row.get('Nama_Fasil'),
+    wilayah: row.get('Wilayah_Binaan') || '-',
+    role_fasil: row.get('Role') || 'Team Leader',
+    relasi_pm: row.get('Relasi_PM') || '',
+  }));
+
+  // 6. Self-Report Fasil — hitung rata-rata semua _Skor kolom per row
+  const srFasilHeaders = sheetSRFasil.headerValues || [];
+  const skorCols = srFasilHeaders.filter(h => h.endsWith('_Skor'));
+
+  const allResSRFasil = rowsSRFasil.map(row => {
+    let totalSkor = 0;
+    let countSkor = 0;
+    skorCols.forEach(col => {
+      const val = parseFloat(row.get(col));
+      if (!isNaN(val) && val > 0) { totalSkor += val; countSkor++; }
+    });
+    return {
+      id_fasil: row.get('ID_Fasil'),
+      role_fasil: row.get('Role_Fasil'),
+      bulan_laporan: row.get('Bulan_Laporan'),
+      avg_skor: countSkor > 0 ? parseFloat((totalSkor / countSkor).toFixed(4)) : 0,
+    };
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-[1400px] mx-auto">
@@ -102,6 +136,9 @@ export default async function AdminDashboard() {
           allResPM={allResPM}
           allResFasil={allResFasil}
           availablePeriodes={availablePeriodes}
+          allFasil={allFasil}
+          allResSRFasil={allResSRFasil}
+          periodeFasil={periodeFasil}
         />
       </div>
     </div>
