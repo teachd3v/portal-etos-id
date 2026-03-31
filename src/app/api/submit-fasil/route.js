@@ -7,9 +7,9 @@ export async function POST(req) {
     const body = await req.json();
     const { id_fasil, id_etoser_dinilai, jawaban, rekomendasi, catatan_kualitatif, sanksi = [], total_poin = 0 } = body;
 
-    const sheet = await getGoogleSheet('Response_Fasil');
+    const sheet = await getGoogleSheet('Review_Fasil');
 
-    // Susun data sesuai urutan kolom di sheet Response_Fasil (A1-P1)
+    // Susun data sesuai urutan kolom di sheet Review_Fasil (A1-P1)
     const newRow = {
       Timestamp: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
       ID_Fasil: id_fasil,

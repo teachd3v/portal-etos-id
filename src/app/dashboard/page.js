@@ -26,11 +26,28 @@ export default async function DashboardPM() {
   
   // AMBIL TAHUN PEMBINAAN MANUAL DARI DATA LOGIN (DATABASE)
   const tahunPembinaanValid = parseInt(user.tahun_pembinaan);
+
+  // 3. Tarik Soal Dinamis (Sesuai angka manual di database)
+  let instrumen = [];
+  if (tahunPembinaanValid >= 1 && tahunPembinaanValid <= 4) {
+    const sheetInstrumen = await getGoogleSheet('Instrumen_Etoser');
+    const rowsInstrumen = await sheetInstrumen.getRows();
+
+    instrumen = rowsInstrumen
+      .filter(row => parseInt(row.get('Tahun')) === tahunPembinaanValid)
+      .map(row => ({
+        variabel: row.get('Variabel'),
+        kode: row.get('Kode'),
+        jenisSkala: row.get('Jenis_Skala'),
+        item: row.get('Item_Pernyataan'),
+        validasi: row.get('Pertanyaan_Validasi') || null
+      }));
+  }
   
   let statusForm = periodeStatus;
   let pesanStatus = periodePesan;
 
-  // 3. ATURAN KHUSUS (ALUMNI, CAMABA, & TAHUN 4)
+  // 4. ATURAN KHUSUS (ALUMNI, CAMABA, & TAHUN 4)
   if (tahunPembinaanValid > 4) {
     statusForm = 'ALUMNI';
     pesanStatus = 'Selamat! Kamu telah menyelesaikan 4 tahun masa pembinaan Etos ID. Pengisian laporan sudah tidak diperlukan.';
@@ -44,22 +61,24 @@ export default async function DashboardPM() {
 
   let adminFeedback = '';
 
-  // 4. CEK DOUBLE INPUT
+  // 5. CEK DOUBLE INPUT
   if (statusForm === 'OPEN') {
     try {
       const sheetResponses = await getGoogleSheet('Response_PM');
       const rowsResponses = await sheetResponses.getRows();
 
       const currentRow = rowsResponses.find(
-        (row) => row.get('ID_Etoser') === user.id && row.get('Bulan_Laporan') === periodeSekarang
+        (row) => String(row.get('ID_Etoser')) === String(user.id) && row.get('Bulan_Laporan') === periodeSekarang
       );
 
       if (currentRow) {
-        // Cek apakah sudah benar-benar isi skor (bukan sekedar entry feedback admin)
-        const hasScores = !!currentRow.get('A1_Skor'); 
+        // Cek apakah sudah benar-benar isi skor (dinamis cek salah satu kode dari instrumen bulan ini)
+        const firstCode = instrumen.length > 0 ? instrumen[0].kode : 'A1';
+        const hasScores = !!currentRow.get(`${firstCode}_Skor`); 
+
         if (hasScores) {
           statusForm = 'SUBMITTED';
-          pesanStatus = `Kamu sudah mengisi Laporan Bulanan untuk periode ${periodeSekarang}. Terima kasih!`;
+          pesanStatus = `Kamu telah mengisi laporan untuk periode ${periodeSekarang}. Data sedang dievaluasi oleh Fasilitator.`;
         }
         // Ambil feedback admin bulan berjalan (jika ada)
         adminFeedback = currentRow.get('Official_Feedback') || '';
@@ -69,29 +88,12 @@ export default async function DashboardPM() {
     }
   }
 
-  // 5. Tarik Soal Dinamis (Sesuai angka manual di database)
-  let instrumen = [];
-  if (tahunPembinaanValid >= 1 && tahunPembinaanValid <= 4) {
-    const sheetInstrumen = await getGoogleSheet('Data_Instrumen');
-    const rowsInstrumen = await sheetInstrumen.getRows();
-
-    instrumen = rowsInstrumen
-      .filter(row => parseInt(row.get('Tahun')) === tahunPembinaanValid)
-      .map(row => ({
-        variabel: row.get('Variabel'),
-        kode: row.get('Kode'),
-        jenisSkala: row.get('Jenis_Skala'),
-        item: row.get('Item_Pernyataan'),
-        validasi: row.get('Pertanyaan_Validasi') || null
-      }));
-  }
-
   // 6. Tarik Data Performa & Feedback (TAMPILKAN DI DASHBOARD)
   let evaluationData = null;
   try {
     const [sheetResPM, sheetResFasil] = await Promise.all([
       getGoogleSheet('Response_PM'),
-      getGoogleSheet('Response_Fasil'),
+      getGoogleSheet('Review_Fasil'),
     ]);
     const [rowsResPM, rowsResFasil] = await Promise.all([
       sheetResPM.getRows(),
@@ -99,7 +101,7 @@ export default async function DashboardPM() {
     ]);
 
     const myFasilEvals = rowsResFasil
-      .filter(r => r.get('ID_Etoser_Dinilai') === user.id)
+      .filter(r => String(r.get('ID_Etoser_Dinilai')) === String(user.id))
       .reverse();
 
     if (myFasilEvals.length > 0) {
@@ -112,7 +114,7 @@ export default async function DashboardPM() {
 
       // Cari Self-Report PM yang sesuai dengan periode evaluasi tsb
       const latestPM = rowsResPM
-        .filter(r => r.get('ID_Etoser') === user.id && r.get('Bulan_Laporan') === periodeFasilEval)
+        .filter(r => String(r.get('ID_Etoser')) === String(user.id) && r.get('Bulan_Laporan') === periodeFasilEval)
         .reverse()[0];
 
       // Helper hitung rata-rata PM dinamis
@@ -159,6 +161,8 @@ export default async function DashboardPM() {
         avg: avgIPK.toFixed(2),
         rekomendasi: latestFasil.get('Kesimpulan_Rekomendasi'),
         sanksi_poin: parseInt(latestFasil.get('Total_Poin')) || 0,
+        detail_pelanggaran: latestFasil.get('Detail_Pelanggaran') || '',
+        catatan_kualitatif: latestFasil.get('Catatan_Kualitatif') || '',
         feedback: latestPM?.get('Official_Feedback') || '',
         periode: periodeFasilEval
       };
@@ -207,6 +211,7 @@ export default async function DashboardPM() {
           pesanStatus={pesanStatus}
           evaluationData={evaluationData}
           adminFeedback={adminFeedback}
+          isEvaluating={statusForm === 'SUBMITTED' && !evaluationData}
         />
       </div>
     </div>

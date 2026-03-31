@@ -1,7 +1,7 @@
 // src/app/dashboard/FormSelfReport.js
 'use client';
 import { useState } from 'react';
-import { Loader2, CheckCircle2, AlertCircle, Star, LayoutDashboard, ClipboardList, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Star, LayoutDashboard, ClipboardList, AlertTriangle, TrendingUp, MessageSquareText } from 'lucide-react';
 
 // --- KOMPONEN BINTANG INTERAKTIF ---
 const StarRating = ({ kode, jenisSkala, currentValue, onChange }) => {
@@ -52,7 +52,7 @@ const StarRating = ({ kode, jenisSkala, currentValue, onChange }) => {
 };
 
 // --- KOMPONEN FORM UTAMA ---
-export default function FormSelfReport({ instrumen, user, tahunPembinaan, periode, statusForm, pesanStatus, evaluationData, adminFeedback }) {
+export default function FormSelfReport({ instrumen, user, tahunPembinaan, periode, statusForm, pesanStatus, evaluationData, adminFeedback, isEvaluating }) {
   const [activeTab, setActiveTab] = useState('lapor');
   const [jawaban, setJawaban] = useState({});
   const [modal, setModal] = useState({ isOpen: false, type: '', title: '', message: '' });
@@ -218,27 +218,92 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
         <div className="space-y-6">
           {!evaluationData ? (
             <div className="bg-white border rounded-2xl p-12 text-center shadow-sm">
-              <LayoutDashboard className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-xl font-bold text-gray-800">Belum Ada Data Performa</h3>
+              {isEvaluating ? (
+                <>
+                  <Loader2 className="w-16 h-16 mx-auto text-blue-500 mb-4 animate-spin" />
+                  <h3 className="text-xl font-bold text-gray-800">Data sedang di evaluasi Fasilitator</h3>
+                  <p className="text-gray-500 mt-2">Terima kasih sudah melapor! Tunggu fasilitator memberikan penilaian ya.</p>
+                </>
+              ) : (
+                <>
+                  <LayoutDashboard className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                  <h3 className="text-xl font-bold text-gray-800">Belum Ada Data Performa</h3>
+                </>
+              )}
             </div>
           ) : (
             <>
-              <div className="bg-blue-600 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
-                <div className="absolute right-[-20px] top-[-20px] opacity-10"><TrendingUp className="w-48 h-48" /></div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div>
-                    <p className="text-blue-100 font-bold uppercase tracking-[0.2em] text-xs mb-2">Rata-rata Skor Pembinaan</p>
-                    <h2 className="text-6xl font-black">{evaluationData.avg}</h2>
-                    <span className="mt-4 inline-block bg-white/20 backdrop-blur-md px-4 py-1 rounded-full border border-white/20 font-bold text-sm">{evaluationData.rekomendasi}</span>
+              {(() => {
+                const avgVal = parseFloat(evaluationData.avg) || 0;
+                let bgGradient = "from-blue-600 to-blue-700 shadow-blue-200";
+                let badgeColor = "bg-white/20 border-white/30 text-white";
+                
+                if (avgVal >= 3) {
+                  bgGradient = "from-blue-600 to-indigo-700 shadow-blue-200";
+                } else if (avgVal >= 2) {
+                  bgGradient = "from-orange-500 to-amber-600 shadow-orange-200";
+                } else if (avgVal > 0) {
+                  bgGradient = "from-red-600 to-rose-700 shadow-red-200";
+                }
+
+                return (
+                  <div className={`bg-gradient-to-br ${bgGradient} rounded-3xl p-8 text-white shadow-xl relative overflow-hidden transition-all duration-500`}>
+                    <div className="absolute right-[-20px] top-[-20px] opacity-10"><TrendingUp className="w-48 h-48" /></div>
+                    <div className="relative z-10">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div>
+                          <p className="text-white/80 font-bold uppercase tracking-[0.2em] text-[10px] mb-2">Rata-rata Skor Pembinaan</p>
+                          <h2 className="text-7xl font-black mb-3">{evaluationData.avg}</h2>
+                          <div className="flex flex-wrap gap-2">
+                             <span className={`px-4 py-1.5 rounded-full border font-bold text-xs backdrop-blur-md ${badgeColor}`}>
+                               {evaluationData.rekomendasi}
+                             </span>
+                             {evaluationData.sanksi_poin > 0 && (
+                               <span className="bg-white text-red-600 px-4 py-1.5 rounded-full font-black text-xs shadow-sm flex items-center gap-1.5">
+                                 <AlertTriangle className="w-3.5 h-3.5" /> {evaluationData.sanksi_poin} Poin Sanksi
+                               </span>
+                             )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
+                          <MiniScore label="INT" val={evaluationData.integritas} />
+                          <MiniScore label="PRO" val={evaluationData.profesional} />
+                          <MiniScore label="KON" val={evaluationData.kontributif} />
+                          <MiniScore label="TRA" val={evaluationData.transformatif} />
+                        </div>
+                      </div>
+
+                      {/* Detail Pelanggaran Section (Inside Card) */}
+                      {evaluationData.sanksi_poin > 0 && evaluationData.detail_pelanggaran && (
+                        <div className="mt-8 pt-6 border-t border-white/20">
+                          <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-3 flex items-center gap-2">
+                             Catatan Pelanggaran & Evaluasi Fasil
+                          </p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {evaluationData.detail_pelanggaran.split(',').map((p, i) => (
+                              <div key={i} className="bg-black/10 backdrop-blur-md border border-white/10 p-3 rounded-xl flex items-start gap-3">
+                                <div className="w-1.5 h-1.5 rounded-full bg-white/50 mt-1.5 shrink-0" />
+                                <span className="text-xs font-bold leading-relaxed">{p.trim()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
-                    <MiniScore label="INT" val={evaluationData.integritas} />
-                    <MiniScore label="PRO" val={evaluationData.profesional} />
-                    <MiniScore label="KON" val={evaluationData.kontributif} />
-                    <MiniScore label="TRA" val={evaluationData.transformatif} />
+                );
+              })()}
+              {evaluationData.catatan_kualitatif && (
+                <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+                  <div className="flex items-center gap-2 mb-4 text-purple-600 font-black">
+                    <MessageSquareText className="w-5 h-5" /> Catatan & Saran Fasilitator
+                  </div>
+                  <div className="bg-purple-50/50 rounded-2xl p-6 border border-purple-100 italic text-purple-900 font-bold text-lg">
+                    &quot;{evaluationData.catatan_kualitatif}&quot;
                   </div>
                 </div>
-              </div>
+              )}
+
               <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4 text-blue-600 font-black"><AlertCircle className="w-5 h-5" /> Catatan & Feedback Admin</div>
                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 italic text-gray-700 font-bold text-lg">&quot;{evaluationData.feedback || 'Pertahankan prestasimu!'}&quot;</div>
@@ -266,9 +331,29 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
   );
 }
 
-const MiniScore = ({ label, val }) => (
-  <div className="bg-white/10 border border-white/20 p-3 rounded-2xl text-center backdrop-blur-sm">
-    <p className="text-[10px] font-bold opacity-70 mb-1">{label}</p>
-    <p className="text-xl font-black">{val ? val.toFixed(1) : '0'}</p>
-  </div>
-);
+const MiniScore = ({ label, val }) => {
+  const score = parseFloat(val) || 0;
+  
+  // Logika Warna Dinamis
+  let bgColor = "bg-white/10";
+  let borderColor = "border-white/20";
+  let textColor = "text-white";
+
+  if (score >= 3) {
+    bgColor = "bg-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.3)]";
+    borderColor = "border-blue-300/40";
+  } else if (score >= 2) {
+    bgColor = "bg-orange-500/40 shadow-[0_0_15px_rgba(249,115,22,0.3)]";
+    borderColor = "border-orange-300/40";
+  } else if (score >= 1) {
+    bgColor = "bg-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.3)]";
+    borderColor = "border-red-300/40";
+  }
+
+  return (
+    <div className={`${bgColor} ${borderColor} border p-3 rounded-2xl text-center backdrop-blur-md transition-all hover:scale-105 duration-300`}>
+      <p className="text-[10px] font-black opacity-80 mb-1 tracking-widest uppercase">{label}</p>
+      <p className={`text-xl font-black ${textColor}`}>{score > 0 ? score.toFixed(1) : '0'}</p>
+    </div>
+  );
+};

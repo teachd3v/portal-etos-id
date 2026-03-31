@@ -1,6 +1,7 @@
 // src/app/fasil/dashboard/FasilClient.js
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2, UserCheck, ChevronRight, Star, AlertTriangle, Lock, Plus, Trash2, BadgeCheck, ClipboardList, LayoutDashboard } from 'lucide-react';
 
 import SelfReportFasilClient from './SelfReportFasilClient';
@@ -48,6 +49,7 @@ export default function FasilClient({
   instrumenFasil = [], sudahSelfReport, statusFormFasil, pesanStatusFasil, 
   periodeFasil, evaluationData, adminFeedback 
 }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPM, setSelectedPM] = useState(null);
   const [jawaban, setJawaban] = useState({});
@@ -137,7 +139,12 @@ export default function FasilClient({
       });
       if (res.ok) {
         setSukses(true);
-        setTimeout(() => { setSelectedPM(null); setSukses(false); setListSanksi([]); }, 3000);
+        setTimeout(() => { 
+          router.refresh(); 
+          setSelectedPM(null); 
+          setSukses(false); 
+          setListSanksi([]); 
+        }, 4500);
       } else alert('Gagal mengirim data!');
     } catch { alert('Terjadi kesalahan jaringan.'); } finally { setLoading(false); }
   };
@@ -361,9 +368,12 @@ export default function FasilClient({
 
             {sukses ? (
               <div className="py-16 flex flex-col items-center justify-center text-center">
-                <CheckCircle2 className="w-24 h-24 text-green-500 mb-6 animate-bounce" />
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Evaluasi Tersimpan!</h3>
-                <p className="text-gray-500 font-medium">Data penilaian untuk {selectedPM.nama} telah masuk ke database pusat.</p>
+                <CheckCircle2 className="w-24 h-24 text-teal-500 mb-6 animate-bounce" />
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Evaluasi Terkirim!</h3>
+                <p className="text-gray-500 font-medium mb-4">Data sedang disinkronkan ke pusat...</p>
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full animate-pulse">
+                   <Loader2 className="w-3 h-3 animate-spin"/> Menyegarkan Status Evaluasi PM
+                </div>
               </div>
             ) : (
               <>

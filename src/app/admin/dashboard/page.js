@@ -34,9 +34,9 @@ export default async function AdminDashboard() {
   const [sheetPM, sheetResPM, sheetResFasil, sheetFasil, sheetSRFasil] = await Promise.all([
     getGoogleSheet('Users_PM'),
     getGoogleSheet('Response_PM'),
-    getGoogleSheet('Response_Fasil'),
+    getGoogleSheet('Review_Fasil'),
     getGoogleSheet('Users_Fasil'),
-    getGoogleSheet('Response_Self_Report_Fasil'),
+    getGoogleSheet('Response_Fasil'),
   ]);
   const [rowsPM, rowsResPM, rowsResFasil, rowsFasil, rowsSRFasil] = await Promise.all([
     sheetPM.getRows(),
@@ -72,6 +72,7 @@ export default async function AdminDashboard() {
       fasil_trans:       parseFloat(row.get('Skor_Transformatif')) || 0,
       rekomendasi:       row.get('Kesimpulan_Rekomendasi') || 'Belum Dievaluasi',
       total_poin:        parseInt(row.get('Total_Poin')) || 0,
+      detail_pelanggaran: row.get('Detail_Pelanggaran') || '',
       feedback_admin:    row.get('Feedback_Admin') || '',
     };
   });
@@ -109,7 +110,7 @@ export default async function AdminDashboard() {
 
   // 7. Tarik Data Instrumen (untuk modal detail)
   const [sheetInstPM, sheetInstFasil] = await Promise.all([
-    getGoogleSheet('Data_Instrumen'),
+    getGoogleSheet('Instrumen_Etoser'),
     getGoogleSheet('Instrumen_Fasil'),
   ]);
   const [rowsInstPM, rowsInstFasil] = await Promise.all([

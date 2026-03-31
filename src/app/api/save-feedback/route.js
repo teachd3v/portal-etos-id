@@ -33,7 +33,7 @@ export async function POST(req) {
         });
       }
     } else if (target === 'fasil') {
-      const sheet = await getGoogleSheet('Response_Self_Report_Fasil');
+      const sheet = await getGoogleSheet('Response_Fasil');
       const rows = await sheet.getRows();
       // Cari row yg sesuai (ID_Fasil & Periode)
       const row = rows.find(r => r.get('ID_Fasil') === id && r.get('Bulan_Laporan') === periode);

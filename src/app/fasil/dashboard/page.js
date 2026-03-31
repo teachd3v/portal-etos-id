@@ -1,4 +1,5 @@
 // src/app/fasil/dashboard/page.js
+export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { redirect } from 'next/navigation';
@@ -59,7 +60,7 @@ export default async function DashboardFasil() {
   // 4b. Cek PM mana saja yang sudah dinilai oleh fasil ini di periode saat ini
   let evaluatedPMIds = new Set();
   try {
-    const sheetResFasil = await getGoogleSheet('Response_Fasil');
+    const sheetResFasil = await getGoogleSheet('Review_Fasil');
     const rowsResFasil = await sheetResFasil.getRows();
     const [periodeMonth, periodeYear] = periode.split('-'); // "03", "2026"
 
@@ -78,7 +79,7 @@ export default async function DashboardFasil() {
       }
     });
   } catch (e) {
-    console.error("Gagal menarik Response_Fasil", e);
+    console.error("Gagal menarik Review_Fasil", e);
   }
 
   // 5. Filter PM berdasarkan Relasi_PM (jika ada), fallback ke wilayah
@@ -95,7 +96,15 @@ export default async function DashboardFasil() {
       tahun_pembinaan: row.get('Tahun_Pembinaan'),
       sudah_lapor: submittedPMIds.has(row.get('ID')),
       sudah_dinilai: evaluatedPMIds.has(row.get('ID')),
-    }));
+    }))
+    .sort((a, b) => {
+      // Prioritas 1: Yang sudah lapor di atas
+      if (a.sudah_lapor !== b.sudah_lapor) {
+        return b.sudah_lapor ? 1 : -1;
+      }
+      // Prioritas 2: Abjad nama A-Z
+      return a.nama.localeCompare(b.nama);
+    });
 
   // 6. Tarik Data Instrumen Sanksi
   let dataSanksi = [];
@@ -135,7 +144,7 @@ export default async function DashboardFasil() {
   let evaluationData = null;
   let sudahSelfReport = false;
   try {
-    const sheetSR = await getGoogleSheet('Response_Self_Report_Fasil');
+    const sheetSR = await getGoogleSheet('Response_Fasil');
     const rowsSR = await sheetSR.getRows();
     
     // Check if already self-reported this period
@@ -151,10 +160,13 @@ export default async function DashboardFasil() {
     if (myEvals.length > 0) {
       const latest = myEvals[0];
       const scores = [];
-      // Dinamis ambil semua kolom Skor_
+      // Dinamis ambil semua kolom yang berakhiran _Skor
       Object.keys(latest.toObject()).forEach(key => {
-        if (key.startsWith('Skor_')) {
-          scores.push(parseFloat(latest.get(key)) || 0);
+        if (key.endsWith('_Skor')) {
+          const val = parseFloat(latest.get(key));
+          if (!isNaN(val) && val > 0) {
+            scores.push(val);
+          }
         }
       });
       const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;

@@ -191,6 +191,7 @@ export default function AdminClient({
         rekomendasi: sanksiLabel,
         kena_sanksi: poinSanksi > 0,
         total_poin: poinSanksi,
+        detail_pelanggaran: latestFasil?.detail_pelanggaran || '',
         pm_int, pm_prof, pm_kont, pm_trans,
         fasil_int, fasil_prof, fasil_kontributif, fasil_trans,
         total_int, total_prof, total_kontributif, total_trans,
@@ -820,21 +821,40 @@ export default function AdminClient({
               </div>
 
               {/* Status Info */}
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-wrap gap-4 items-center">
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Rata-rata IPK Pembinaan</p>
-                  <p className={`text-4xl font-black ${getIPKStyle(selectedEtoser.ipk_pembinaan)}`}>{selectedEtoser.ipk_pembinaan.toFixed(2)}</p>
-                </div>
-                <div className="h-12 w-px bg-blue-200 hidden md:block"></div>
-                <div className="flex-1 min-w-[200px]">
-                  <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Evaluasi & Sanksi</p>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${getRekStyle(selectedEtoser.rekomendasi)}`}>{selectedEtoser.rekomendasi}</span>
-                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${selectedEtoser.kena_sanksi ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
-                      {selectedEtoser.total_poin} Poin Sanksi
-                    </span>
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-col gap-4">
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Rata-rata IPK Pembinaan</p>
+                    <p className={`text-4xl font-black ${getIPKStyle(selectedEtoser.ipk_pembinaan)}`}>{selectedEtoser.ipk_pembinaan.toFixed(2)}</p>
+                  </div>
+                  <div className="h-12 w-px bg-blue-200 hidden md:block"></div>
+                  <div className="flex-1 min-w-[200px]">
+                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Evaluasi & Sanksi</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${getRekStyle(selectedEtoser.rekomendasi)}`}>{selectedEtoser.rekomendasi}</span>
+                      <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${selectedEtoser.kena_sanksi ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                        {selectedEtoser.total_poin} Poin Sanksi
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Detail Pelanggaran List */}
+                {selectedEtoser.kena_sanksi && selectedEtoser.detail_pelanggaran && (
+                  <div className="pt-3 border-t border-blue-100/50">
+                    <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" /> Daftar Pelanggaran & Catatan Perbaikan
+                    </p>
+                    <ul className="space-y-1.5">
+                      {selectedEtoser.detail_pelanggaran.split(',').map((p, i) => (
+                        <li key={i} className="text-xs font-medium text-red-700 flex items-start gap-2 bg-red-50/50 p-2 rounded-xl border border-red-100">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                          <span>{p.trim()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               {/* Feedback Section */}
@@ -877,7 +897,11 @@ export default function AdminClient({
                         const raw = rawResponsesPM.find(r => r.ID_Etoser === selectedEtoser.id && r.Bulan_Laporan === filterEnd);
                         if (!raw) return <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-400 font-medium">Data detail tidak ditemukan untuk periode ini.</td></tr>;
                         
-                        return instrumentPM.map(item => (
+                        const filteredInstruments = instrumentPM.filter(item => 
+                          String(item.tahun) === String(selectedEtoser.tahun_pembinaan)
+                        );
+                        
+                        return filteredInstruments.map(item => (
                           <tr key={item.kode} className="hover:bg-gray-50">
                             <td className="px-4 py-3 font-bold text-gray-400 uppercase">{item.kode}</td>
                             <td className="px-4 py-3 font-medium text-gray-700">{item.item}</td>

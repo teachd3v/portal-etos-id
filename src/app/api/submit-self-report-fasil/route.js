@@ -6,34 +6,53 @@ export async function POST(req) {
   try {
     const { id_fasil, role_fasil, periode, jawaban } = await req.json();
 
-    const sheet = await getGoogleSheet('Response_Self_Report_Fasil');
+    const sheet = await getGoogleSheet('Response_Fasil');
 
-    // Pastikan kolom skor sudah ada di header sheet sebelum addRow()
-    // Jika sheet benar-benar kosong, loadHeaderRow() akan melempar error
+    const mandatoryHeaders = ['Timestamp', 'ID_Fasil', 'Role_Fasil', 'Bulan_Laporan', 'Official_Feedback'];
+    let currentHeaders = [];
     try {
       await sheet.loadHeaderRow();
+      currentHeaders = sheet.headerValues || [];
     } catch {
-      // Abaikan error jika sheet kosong (belum ada header sama sekali)
+      // Sheet kosong
     }
 
-    const existingHeaders = [...(sheet.headerValues || ['Timestamp', 'ID_Fasil', 'Role_Fasil', 'Bulan_Laporan'])];
+    const headerSet = new Set(mandatoryHeaders);
+    currentHeaders.forEach(h => headerSet.add(h));
 
-    let headersChanged = false;
     for (const kode in jawaban) {
-      if (!existingHeaders.includes(`${kode}_Skor`)) {
-        existingHeaders.push(`${kode}_Skor`);
-        headersChanged = true;
-      }
-      if (!existingHeaders.includes(`${kode}_Val`)) {
-        existingHeaders.push(`${kode}_Val`);
-        headersChanged = true;
-      }
+      if (!kode || kode === 'undefined' || kode === 'null') continue;
+      headerSet.add(`${kode}_Skor`);
+      headerSet.add(`${kode}_Val`);
     }
 
-    if (headersChanged || !sheet.headerValues) {
-      await sheet.setHeaderRow(existingHeaders);
-      // RELOAD headers to ensure addRow mapping is updated!
+    const finalHeaders = Array.from(headerSet);
+
+    // 2. Cek apakah ada perubahan (tambah kolom baru atau perbaikan A-E)
+    // Gunakan "Double-Check Sync" untuk skalabilitas tinggi
+    const isSame = finalHeaders.length === currentHeaders.length && 
+                   finalHeaders.every((h, i) => h === currentHeaders[i]);
+
+    if (!isSame) {
+      console.log('Detected Fasil Header Change, Syncing Latest...');
+      // Re-load sekali lagi detik terakhir biar nggak tabrakan sama user lain
       await sheet.loadHeaderRow();
+      const latestHeaders = sheet.headerValues || [];
+      const syncSet = new Set([...mandatoryHeaders, ...latestHeaders, ...finalHeaders]);
+      const syncedHeaders = Array.from(syncSet);
+
+      // PRO-FIX: Jika jumlah kolom baru melebihi kapasitas sheet saat ini, kita harus RESIZE dulu
+      const currentColCount = sheet.gridProperties?.columnCount || 26;
+      if (syncedHeaders.length > currentColCount) {
+        console.log(`Resizing Fasil sheet to fit ${syncedHeaders.length} columns...`);
+        await sheet.resize({ 
+          rowCount: sheet.gridProperties?.rowCount || 1000, 
+          columnCount: syncedHeaders.length + 5 // Kasih extra 5 biar nggak sering resize
+        });
+      }
+
+      await sheet.setHeaderRow(syncedHeaders);
+      await sheet.loadHeaderRow(); 
     }
 
     const newRow = {
