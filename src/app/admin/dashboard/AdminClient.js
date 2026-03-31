@@ -10,8 +10,9 @@ import {
 } from 'recharts';
 import {
   Users, FileCheck, AlertTriangle, Search, Filter, BadgeCheck,
-  ShieldAlert, TrendingUp, ClipboardList, Star, Medal,
+  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2,
 } from 'lucide-react';
+
 
 // Konversi "MM-YYYY" ke integer untuk perbandingan kronologis
 const periodeToInt = (p) => {
@@ -78,6 +79,7 @@ const FasilBarTooltip = ({ active, payload }) => {
 export default function AdminClient({
   periodeAktif, allPM, allResPM, allResFasil, availablePeriodes,
   allFasil = [], allResSRFasil = [], periodeFasil,
+  instrumentPM = [], instrumentFasil = [], rawResponsesPM = [], rawResponsesSRFasil = [],
 }) {
   // --- GLOBAL TAB ---
   const [activeTab, setActiveTab] = useState('etoser');
@@ -91,7 +93,35 @@ export default function AdminClient({
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
 
+  // --- STATE MODAL DETAIL ---
+  const [selectedEtoser, setSelectedEtoser] = useState(null);
+  const [selectedFasil, setSelectedFasil] = useState(null);
+  const [showSanksiModal, setShowSanksiModal] = useState(false);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+
   useEffect(() => { setCurrentPage(1); }, [search, filterWilayah, filterAngkatan, filterStart, filterEnd]);
+
+  // Pre-fill feedback when selecting Etoser atau Fasil
+  useEffect(() => {
+    if (selectedEtoser) {
+      console.log('DEBUG: selectedEtoser feedback_admin:', selectedEtoser.feedback_admin);
+      setFeedbackText(selectedEtoser.feedback_admin || '');
+    }
+  }, [selectedEtoser]);
+
+  useEffect(() => {
+    if (selectedFasil) {
+      // Find official feedback for the selected fasil and periodeFasil
+      const sr = allResSRFasil.find(r => 
+        String(r.id_fasil) === String(selectedFasil.id) && 
+        String(r.bulan_laporan) === String(periodeFasil)
+      );
+      console.log('DEBUG: selectedFasil found SR record:', sr);
+      setFeedbackText(sr?.official_feedback || '');
+    }
+  }, [selectedFasil, allResSRFasil, periodeFasil]);
 
   const listWilayah  = ['Semua', ...new Set(allPM.map(d => d.wilayah))];
   const listAngkatan = ['Semua', ...new Set(allPM.map(d => d.angkatan))].sort();
@@ -106,17 +136,20 @@ export default function AdminClient({
 
     return allPM.map(pm => {
       const pmResponses = allResPM.filter(r =>
-        r.id_etoser === pm.id &&
+        String(r.id_etoser) === String(pm.id) &&
         periodeToInt(r.bulan_laporan) >= startInt &&
         periodeToInt(r.bulan_laporan) <= endInt
       );
-      const latestPM = pmResponses.length > 0 ? pmResponses[pmResponses.length - 1] : null;
+      // Untuk feedback_admin, kita ambil spesifik periode filterEnd jika ada laporan di sana
+      const pmTargetRow = pmResponses.find(r => r.bulan_laporan === filterEnd);
+      const latestPM = pmTargetRow || (pmResponses.length > 0 ? pmResponses[pmResponses.length - 1] : null);
 
-      const fasilResponses = allResFasil.filter(r => r.id_etoser_dinilai === pm.id);
+      const fasilResponses = allResFasil.filter(r => String(r.id_etoser_dinilai) === String(pm.id));
       const latestFasil = fasilResponses.length > 0 ? fasilResponses[fasilResponses.length - 1] : null;
 
       const pm_int   = latestPM?.pm_int   || 0;
       const pm_prof  = latestPM?.pm_prof  || 0;
+      const pm_kont  = latestPM?.pm_kont  || 0;
       const pm_trans = latestPM?.pm_trans || 0;
 
       const fasil_int         = latestFasil?.fasil_int         || 0;
@@ -124,31 +157,50 @@ export default function AdminClient({
       const fasil_kontributif = latestFasil?.fasil_kontributif || 0;
       const fasil_trans       = latestFasil?.fasil_trans       || 0;
 
-      const blend = (a, b) => (a && b) ? (a + b) / 2 : (a || b);
+      // Bobot: 70% Fasil, 30% PM
+      const blend = (pm, fasil) => {
+        if (pm && fasil) return parseFloat(((fasil * 0.7) + (pm * 0.3)).toFixed(4));
+        return fasil || pm || 0;
+      };
+
       const total_int         = blend(pm_int, fasil_int);
       const total_prof        = blend(pm_prof, fasil_prof);
-      const total_kontributif = fasil_kontributif;
+      const total_kontributif = blend(pm_kont, fasil_kontributif);
       const total_trans       = blend(pm_trans, fasil_trans);
 
       const scores = [total_int, total_prof, total_kontributif, total_trans].filter(s => s > 0);
       const ipk_pembinaan = scores.length > 0
         ? parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
         : 0;
+      
+      // LOGIKA SANKSI OTOMATIS: Jika deadline lewat (tgl > 3) dan belum lapor
+      const hariIni = new Date().getDate();
+      let poinSanksi = latestFasil?.total_poin || 0;
+      let sanksiLabel = latestFasil?.rekomendasi || 'Belum Dievaluasi';
+      
+      if (!pmResponses.length && hariIni > 3 && filterEnd === periodeAktif) {
+        poinSanksi = Math.max(poinSanksi, 30);
+        if (sanksiLabel === 'Belum Dievaluasi') sanksiLabel = 'Tidak Mengirim Laporan (Auto)';
+      }
 
       return {
         id: pm.id, nama: pm.nama, angkatan: pm.angkatan,
         wilayah: pm.wilayah, tahun_pembinaan: pm.tahun_pembinaan,
         status_lapor_pm:    pmResponses.length > 0,
         status_dinilai_fasil: fasilResponses.length > 0,
-        rekomendasi: latestFasil?.rekomendasi || 'Belum Dievaluasi',
-        kena_sanksi: (latestFasil?.total_poin || 0) > 0,
-        pm_int, pm_prof, pm_trans,
+        rekomendasi: sanksiLabel,
+        kena_sanksi: poinSanksi > 0,
+        total_poin: poinSanksi,
+        pm_int, pm_prof, pm_kont, pm_trans,
         fasil_int, fasil_prof, fasil_kontributif, fasil_trans,
         total_int, total_prof, total_kontributif, total_trans,
         ipk_pembinaan,
+        feedback_admin: latestPM?.feedback_admin || '', // Ambil dari Response_PM (koleksi Official_Feedback)
+        all_pm_responses: pmResponses,
+        all_fasil_responses: fasilResponses,
       };
     });
-  }, [allPM, allResPM, allResFasil, filterStart, filterEnd]);
+  }, [allPM, allResPM, allResFasil, filterStart, filterEnd, periodeAktif]);
 
   // --- TREND DATA ---
   const trendData = useMemo(() => {
@@ -160,10 +212,14 @@ export default function AdminClient({
         return fp === pInt || fp === pInt + 1;
       });
       const avgOf = (arr, key) => arr.length ? arr.reduce((s, r) => s + (r[key] || 0), 0) / arr.length : 0;
-      const t_int  = (() => { const a = avgOf(pmRes,'pm_int'),  b = avgOf(fasilRes,'fasil_int');  return (a&&b)?(a+b)/2:(a||b); })();
-      const t_prof = (() => { const a = avgOf(pmRes,'pm_prof'), b = avgOf(fasilRes,'fasil_prof'); return (a&&b)?(a+b)/2:(a||b); })();
-      const t_kont = avgOf(fasilRes, 'fasil_kontributif');
-      const t_trans = (() => { const a = avgOf(pmRes,'pm_trans'), b = avgOf(fasilRes,'fasil_trans'); return (a&&b)?(a+b)/2:(a||b); })();
+      
+      const weighted = (pVal, fVal) => (pVal && fVal) ? (fVal * 0.7 + pVal * 0.3) : (fVal || pVal);
+
+      const t_int  = weighted(avgOf(pmRes,'pm_int'),  avgOf(fasilRes,'fasil_int'));
+      const t_prof = weighted(avgOf(pmRes,'pm_prof'), avgOf(fasilRes,'fasil_prof'));
+      const t_kont = weighted(avgOf(pmRes,'pm_kont'), avgOf(fasilRes,'fasil_kontributif'));
+      const t_trans = weighted(avgOf(pmRes,'pm_trans'), avgOf(fasilRes,'fasil_trans'));
+
       const scores = [t_int, t_prof, t_kont, t_trans].filter(s => s > 0);
       const avgIPK = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : 0;
       return {
@@ -177,18 +233,48 @@ export default function AdminClient({
     });
   }, [periodeOptions, allResPM, allResFasil]);
 
-  // --- FILTER ETOSER ---
+
+
+  // --- FILTER & SORT ETOSER ---
   const filteredData = useMemo(() => {
-    return mergedData.filter(d => {
-      const matchSearch   = d.nama.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase());
-      const matchWilayah  = filterWilayah  === 'Semua' || d.wilayah  === filterWilayah;
-      const matchAngkatan = filterAngkatan === 'Semua' || d.angkatan === filterAngkatan;
-      return matchSearch && matchWilayah && matchAngkatan;
-    });
+    return mergedData
+      .filter(d => {
+        const matchSearch   = d.nama.toLowerCase().includes(search.toLowerCase()) || d.id.toLowerCase().includes(search.toLowerCase());
+        const matchWilayah  = filterWilayah  === 'Semua' || d.wilayah  === filterWilayah;
+        const matchAngkatan = filterAngkatan === 'Semua' || d.angkatan === filterAngkatan;
+        return matchSearch && matchWilayah && matchAngkatan;
+      })
+      .sort((a, b) => b.ipk_pembinaan - a.ipk_pembinaan); // SORT BY IPK DESC
   }, [mergedData, search, filterWilayah, filterAngkatan]);
 
   const totalPages    = Math.max(1, Math.ceil(filteredData.length / ITEMS_PER_PAGE));
   const paginatedData = filteredData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const handleSaveFeedback = async (target, id, feedback) => {
+    if (!feedback.trim()) return;
+    setFeedbackLoading(true);
+    try {
+      const res = await fetch('/api/save-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, id, periode: target === 'pm' ? periodeAktif : periodeFasil, feedback })
+      });
+      if (res.ok) {
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          window.location.reload();
+        }, 2000);
+      } else {
+        alert('Gagal menyimpan feedback. Mohon hubungi teknis.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error saat menghubungkan ke server.');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
 
   const totalPM      = filteredData.length;
   const sudahLapor   = filteredData.filter(d => d.status_lapor_pm).length;
@@ -200,14 +286,15 @@ export default function AdminClient({
     { name: 'Belum Lapor',  value: totalPM - sudahLapor, color: '#ef4444' },
   ];
 
-  let sPI=0,sPP=0,sPT=0,sFI=0,sFP=0,sFT=0,cP=0,cF=0;
+  let sPI=0,sPP=0,sPK=0,sPT=0,sFI=0,sFP=0,sFK=0,sFT=0,cP=0,cF=0;
   filteredData.forEach(d => {
-    if (d.status_lapor_pm)    { sPI+=d.pm_int; sPP+=d.pm_prof; sPT+=d.pm_trans; cP++; }
-    if (d.status_dinilai_fasil){ sFI+=d.fasil_int; sFP+=d.fasil_prof; sFT+=d.fasil_trans; cF++; }
+    if (d.status_lapor_pm)    { sPI+=d.pm_int; sPP+=d.pm_prof; sPK+=d.pm_kont; sPT+=d.pm_trans; cP++; }
+    if (d.status_dinilai_fasil){ sFI+=d.fasil_int; sFP+=d.fasil_prof; sFK+=d.fasil_kontributif; sFT+=d.fasil_trans; cF++; }
   });
   const radarData = [
     { subject:'Integritas',   PM: cP?(sPI/cP).toFixed(2):0, Fasil: cF?(sFI/cF).toFixed(2):0 },
     { subject:'Profesional',  PM: cP?(sPP/cP).toFixed(2):0, Fasil: cF?(sFP/cF).toFixed(2):0 },
+    { subject:'Kontributif',  PM: cP?(sPK/cP).toFixed(2):0, Fasil: cF?(sFK/cF).toFixed(2):0 },
     { subject:'Transformatif',PM: cP?(sPT/cP).toFixed(2):0, Fasil: cF?(sFT/cF).toFixed(2):0 },
   ];
 
@@ -364,7 +451,19 @@ export default function AdminClient({
             </div>
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
               <div className="p-3 bg-red-50 text-red-600 rounded-xl"><ShieldAlert className="w-7 h-7"/></div>
-              <div><p className="text-gray-500 font-bold text-xs">PM Kena Sanksi</p><h3 className="text-3xl font-black text-red-600">{pmKenaSanksi}</h3></div>
+              <div className="flex-1">
+                <p className="text-gray-500 font-bold text-xs">PM Kena Sanksi</p>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-3xl font-black text-red-600">{pmKenaSanksi}</h3>
+                  <button 
+                    onClick={() => setShowSanksiModal(true)}
+                    className="p-2 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-lg transition-colors"
+                    title="Lihat Detail Sanksi"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -456,7 +555,11 @@ export default function AdminClient({
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {paginatedData.map(d => (
-                    <tr key={d.id} className="hover:bg-blue-50/40 transition-colors">
+                    <tr 
+                      key={d.id} 
+                      className="hover:bg-blue-50/40 transition-colors cursor-pointer"
+                      onClick={() => setSelectedEtoser(d)}
+                    >
                       <td className="px-4 py-3">
                         <p className="font-bold text-gray-900 text-sm">{d.nama}</p>
                         <p className="text-xs text-gray-400 font-medium">{d.id}</p>
@@ -633,7 +736,11 @@ export default function AdminClient({
                     const progColor = f.completion_rate >= 100 ? 'text-green-600' : f.completion_rate >= 50 ? 'text-blue-600' : 'text-red-600';
                     
                     return (
-                      <tr key={f.id} className={`hover:bg-indigo-50/30 transition-colors ${!f.sudah_lapor ? 'bg-red-50/10' : ''}`}>
+                      <tr 
+                        key={f.id} 
+                        className={`hover:bg-indigo-50/30 transition-colors cursor-pointer ${!f.sudah_lapor ? 'bg-red-50/10' : ''}`}
+                        onClick={() => setSelectedFasil(f)}
+                      >
                         <td className="px-4 py-3 text-center text-base font-bold">{rankIcon}</td>
                         <td className="px-4 py-3">
                           <p className="font-bold text-gray-900">{f.nama}</p>
@@ -687,6 +794,277 @@ export default function AdminClient({
         </>
       )}
 
+      {/* ================================================================= */}
+      {/* MODAL SECTION                                                   */}
+      {/* ================================================================= */}
+
+      {/* 1. Modal Detail Etoser */}
+      {selectedEtoser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden animate-in zoom-in-95 flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+              <div>
+                <h3 className="text-2xl font-black text-gray-900">{selectedEtoser.nama}</h3>
+                <p className="text-gray-500 font-bold text-sm">{selectedEtoser.id} · {selectedEtoser.wilayah} · Angkatan {selectedEtoser.angkatan}</p>
+              </div>
+              <button onClick={() => setSelectedEtoser(null)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400 hover:text-gray-900 font-bold">Close ✕</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Scoring Overview */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <ScoreCard label="Integritas" value={selectedEtoser.total_int} color="green" />
+                <ScoreCard label="Profesional" value={selectedEtoser.total_prof} color="amber" />
+                <ScoreCard label="Kontributif" value={selectedEtoser.total_kontributif} color="purple" />
+                <ScoreCard label="Transformatif" value={selectedEtoser.total_trans} color="red" />
+              </div>
+
+              {/* Status Info */}
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-wrap gap-4 items-center">
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Rata-rata IPK Pembinaan</p>
+                  <p className={`text-4xl font-black ${getIPKStyle(selectedEtoser.ipk_pembinaan)}`}>{selectedEtoser.ipk_pembinaan.toFixed(2)}</p>
+                </div>
+                <div className="h-12 w-px bg-blue-200 hidden md:block"></div>
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Evaluasi & Sanksi</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${getRekStyle(selectedEtoser.rekomendasi)}`}>{selectedEtoser.rekomendasi}</span>
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${selectedEtoser.kena_sanksi ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                      {selectedEtoser.total_poin} Poin Sanksi
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feedback Section */}
+              <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-3">
+                <label className="block text-sm font-black text-gray-700">Catatan/Feedback Admin untuk Etoser</label>
+                <p className="text-xs text-gray-400 italic">Feedback ini akan muncul saat etoser mengisi laporan bulanan berikutnya.</p>
+                <textarea 
+                  className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 bg-white shadow-sm font-medium"
+                  rows={3}
+                  placeholder="Tuliskan catatan perbaikan atau apresiasi di sini..."
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                />
+                <button 
+                  onClick={() => handleSaveFeedback('pm', selectedEtoser.id, feedbackText)}
+                  disabled={feedbackLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95"
+                >
+                  {feedbackLoading ? 'Saving...' : (selectedEtoser.feedback_admin ? 'Update Feedback' : 'Simpan Feedback')}
+                </button>
+              </div>
+
+              {/* Detailed Responses Table */}
+              <div className="space-y-4">
+                <h4 className="font-black text-gray-900 flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-blue-600" /> Detail Jawaban Instrumen (Periode {formatPeriode(filterEnd)})
+                </h4>
+                <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-100 text-gray-700 font-bold border-b text-[10px] uppercase">
+                      <tr>
+                        <th className="px-4 py-3 w-16">Kode</th>
+                        <th className="px-4 py-3">Item Pernyataan</th>
+                        <th className="px-4 py-3 text-center">Skor</th>
+                        <th className="px-4 py-3">Teks Validasi / Bukti</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs">
+                      {(() => {
+                        const raw = rawResponsesPM.find(r => r.ID_Etoser === selectedEtoser.id && r.Bulan_Laporan === filterEnd);
+                        if (!raw) return <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-400 font-medium">Data detail tidak ditemukan untuk periode ini.</td></tr>;
+                        
+                        return instrumentPM.map(item => (
+                          <tr key={item.kode} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-bold text-gray-400 uppercase">{item.kode}</td>
+                            <td className="px-4 py-3 font-medium text-gray-700">{item.item}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`font-black ${getIPKStyle(parseFloat(raw[`${item.kode}_Skor`]))}`}>
+                                {raw[`${item.kode}_Skor`] || '-'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 italic">
+                              {raw[`${item.kode}_Val`] || '-'}
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal Detail Fasil */}
+      {selectedFasil && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden animate-in zoom-in-95 flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-indigo-50/50">
+              <div>
+                <h3 className="text-2xl font-black text-indigo-900">{selectedFasil.nama}</h3>
+                <p className="text-indigo-500 font-bold text-sm">{selectedFasil.id} · {selectedFasil.wilayah} · {selectedFasil.role_fasil}</p>
+              </div>
+              <button onClick={() => setSelectedFasil(null)} className="p-2 hover:bg-indigo-100 rounded-xl transition-colors text-indigo-400 hover:text-indigo-900 font-bold">Close ✕</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div className="flex gap-4">
+                <div className="flex-1 bg-indigo-50 rounded-2xl p-5 border border-indigo-100 text-center">
+                  <p className="text-xs font-bold text-indigo-600 uppercase mb-1">Rata-rata Skor Self-Report</p>
+                  <p className="text-4xl font-black text-indigo-900">{selectedFasil.avg_skor?.toFixed(2) || '—'}</p>
+                </div>
+                <div className="flex-1 bg-blue-50 rounded-2xl p-5 border border-blue-100 text-center">
+                  <p className="text-xs font-bold text-blue-600 uppercase mb-1">Penyelesaian Evaluasi PM</p>
+                  <p className="text-4xl font-black text-blue-900">{selectedFasil.completion_rate.toFixed(0)}%</p>
+                </div>
+              </div>
+
+              {/* Status Badge Full */}
+              <div className={`p-4 rounded-2xl border text-center font-bold
+                ${selectedFasil.perf_status.color === 'purple' ? 'bg-purple-50 text-purple-700 border-purple-200' : 
+                  selectedFasil.perf_status.color === 'green' ? 'bg-green-50 text-green-700 border-green-200' :
+                  selectedFasil.perf_status.color === 'red' ? 'bg-red-50 text-red-700 border-red-200' :
+                  'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                Status Performa: {selectedFasil.perf_status.label}
+              </div>
+
+              <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-3">
+                <label className="block text-sm font-black text-gray-700">Catatan/Feedback Admin untuk Fasilitator</label>
+                <textarea 
+                  className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 bg-white shadow-sm font-medium"
+                  rows={3}
+                  placeholder="Tuliskan catatan untuk fasilitator..."
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                />
+                <button 
+                  onClick={() => handleSaveFeedback('fasil', selectedFasil.id, feedbackText)}
+                  disabled={feedbackLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95"
+                >
+                  {feedbackLoading ? 'Saving...' : (selectedFasil.sudah_lapor && feedbackText ? 'Update Feedback' : 'Simpan Feedback')}
+                </button>
+              </div>
+
+              {/* Detailed Fasil Responses Table */}
+              <div className="space-y-4">
+                <h4 className="font-black text-gray-900 flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-indigo-600" /> Detail Self-Report Fasilitator (Periode {formatPeriode(periodeFasil)})
+                </h4>
+                <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-100 text-gray-700 font-bold border-b text-[10px] uppercase">
+                      <tr>
+                        <th className="px-4 py-3 w-16">Kode</th>
+                        <th className="px-4 py-3">Item Pernyataan</th>
+                        <th className="px-4 py-3 text-center">Skor</th>
+                        <th className="px-4 py-3">Teks Validasi / Bukti</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs">
+                      {(() => {
+                        const raw = rawResponsesSRFasil.find(r => r.ID_Fasil === selectedFasil.id && r.Bulan_Laporan === periodeFasil);
+                        if (!raw) return <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-400 font-medium">Data detail tidak ditemukan untuk periode ini.</td></tr>;
+                        
+                        // Filter instrument yang sesuai dengan role fasil ini
+                        const myInst = instrumentFasil.filter(inst => inst.variabel === selectedFasil.role_fasil);
+                        
+                        return myInst.map(item => (
+                          <tr key={item.kode} className="hover:bg-gray-100">
+                            <td className="px-4 py-3 font-bold text-gray-400 uppercase">{item.kode}</td>
+                            <td className="px-4 py-3 font-medium text-gray-700">{item.item}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`font-black ${getIPKStyle(parseFloat(raw[`${item.kode}_Skor`]))}`}>
+                                {raw[`${item.kode}_Skor`] || '-'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 italic">
+                              {raw[`${item.kode}_Val`] || '-'}
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal List Sanksi */}
+      {showSanksiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-in zoom-in-95 flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-600 shadow-lg">
+              <h3 className="text-2xl font-black text-white">Daftar Penerima Sanksi</h3>
+              <button onClick={() => setShowSanksiModal(false)} className="text-white/70 hover:text-white font-bold p-2 hover:bg-white/10 rounded-xl">Close ✕</button>
+            </div>
+            <div className="p-0 overflow-y-auto flex-1">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-100 text-gray-600 font-bold sticky top-0 border-b z-10 shadow-sm">
+                  <tr>
+                    <th className="px-6 py-4">Nama PM</th>
+                    <th className="px-6 py-4">Wilayah / Angk.</th>
+                    <th className="px-6 py-4 text-center">Poin</th>
+                    <th className="px-6 py-4">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-900 font-medium">
+                  {mergedData.filter(d => d.kena_sanksi).map(d => (
+                    <tr key={d.id} className="hover:bg-red-50/20">
+                      <td className="px-6 py-4">
+                         <p className="font-black text-gray-900">{d.nama}</p>
+                         <span className="text-[10px] text-gray-400 font-bold">{d.id}</span>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-gray-600">{d.wilayah}<br/><span className="text-xs font-medium">Angkatan {d.angkatan}</span></td>
+                      <td className="px-6 py-4 text-center font-black text-red-600 text-xl">{d.total_poin}</td>
+                      <td className="px-6 py-4 text-xs font-black text-red-700 bg-red-50/50">{d.rekomendasi}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Success Modal */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 text-center animate-in zoom-in-95 max-w-sm w-full">
+            <div className="flex justify-center mb-4">
+              <div className="bg-green-100 p-4 rounded-full">
+                <CheckCircle2 className="w-12 h-12 text-green-600" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 mb-2">Berhasil!</h3>
+            <p className="text-gray-500 font-medium">Feedback telah berhasil disimpan dan diperbarui di database.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const ScoreCard = ({ label, value, color }) => {
+  const colors = {
+    green: 'bg-green-50 text-green-700 border-green-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    purple: 'bg-purple-50 text-purple-700 border-purple-100',
+    red: 'bg-red-50 text-red-700 border-red-100',
+  };
+  return (
+    <div className={`p-4 rounded-2xl border ${colors[color] || 'bg-gray-50'}`}>
+      <p className="text-[10px] font-black uppercase tracking-wider mb-1 opacity-60">{label}</p>
+      <p className="text-2xl font-black">{value ? value.toFixed(2) : '—'}</p>
+    </div>
+  );
+};

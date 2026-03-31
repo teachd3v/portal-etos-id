@@ -17,7 +17,7 @@ export default async function DashboardPM() {
   try {
     user = jwt.verify(token, process.env.JWT_SECRET);
     if (user.role !== 'PM') redirect('/login');
-  } catch (error) {
+  } catch {
     redirect('/login');
   }
 
@@ -42,19 +42,27 @@ export default async function DashboardPM() {
     pesanStatus = 'Laporan bulanan terakhirmu di Tahun ke-4 adalah laporan bulan Juli. Selamat menikmati masa purnamu!';
   }
 
+  let adminFeedback = '';
+
   // 4. CEK DOUBLE INPUT
   if (statusForm === 'OPEN') {
     try {
       const sheetResponses = await getGoogleSheet('Response_PM');
       const rowsResponses = await sheetResponses.getRows();
 
-      const sudahIsi = rowsResponses.find(
+      const currentRow = rowsResponses.find(
         (row) => row.get('ID_Etoser') === user.id && row.get('Bulan_Laporan') === periodeSekarang
       );
 
-      if (sudahIsi) {
-        statusForm = 'SUBMITTED';
-        pesanStatus = `Kamu sudah mengisi Laporan Bulanan untuk periode ${periodeSekarang}. Terima kasih!`;
+      if (currentRow) {
+        // Cek apakah sudah benar-benar isi skor (bukan sekedar entry feedback admin)
+        const hasScores = !!currentRow.get('A1_Skor'); 
+        if (hasScores) {
+          statusForm = 'SUBMITTED';
+          pesanStatus = `Kamu sudah mengisi Laporan Bulanan untuk periode ${periodeSekarang}. Terima kasih!`;
+        }
+        // Ambil feedback admin bulan berjalan (jika ada)
+        adminFeedback = currentRow.get('Official_Feedback') || '';
       }
     } catch (error) {
       console.error("Gagal mengecek status ke Google Sheets:", error);
@@ -63,7 +71,7 @@ export default async function DashboardPM() {
 
   // 5. Tarik Soal Dinamis (Sesuai angka manual di database)
   let instrumen = [];
-  if (statusForm === 'OPEN' && tahunPembinaanValid >= 1 && tahunPembinaanValid <= 4) {
+  if (tahunPembinaanValid >= 1 && tahunPembinaanValid <= 4) {
     const sheetInstrumen = await getGoogleSheet('Data_Instrumen');
     const rowsInstrumen = await sheetInstrumen.getRows();
 
@@ -78,6 +86,87 @@ export default async function DashboardPM() {
       }));
   }
 
+  // 6. Tarik Data Performa & Feedback (TAMPILKAN DI DASHBOARD)
+  let evaluationData = null;
+  try {
+    const [sheetResPM, sheetResFasil] = await Promise.all([
+      getGoogleSheet('Response_PM'),
+      getGoogleSheet('Response_Fasil'),
+    ]);
+    const [rowsResPM, rowsResFasil] = await Promise.all([
+      sheetResPM.getRows(),
+      sheetResFasil.getRows(),
+    ]);
+
+    const myFasilEvals = rowsResFasil
+      .filter(r => r.get('ID_Etoser_Dinilai') === user.id)
+      .reverse();
+
+    if (myFasilEvals.length > 0) {
+      const latestFasil = myFasilEvals[0];
+      
+      // Hitung Periode dari Timestamp Fasil
+      const ts = latestFasil.get('Timestamp') || '';
+      const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      const periodeFasilEval = match ? `${match[2].padStart(2, '0')}-${match[3]}` : '';
+
+      // Cari Self-Report PM yang sesuai dengan periode evaluasi tsb
+      const latestPM = rowsResPM
+        .filter(r => r.get('ID_Etoser') === user.id && r.get('Bulan_Laporan') === periodeFasilEval)
+        .reverse()[0];
+
+      // Helper hitung rata-rata PM dinamis
+      const getPMAvg = (row, varName) => {
+        if (!row) return 0;
+        const codes = instrumen.filter(i => i.variabel === varName).map(i => `${i.kode}_Skor`);
+        let sum = 0; let count = 0;
+        codes.forEach(c => {
+          const val = parseFloat(row.get(c));
+          if (!isNaN(val)) { sum += val; count++; }
+        });
+        return count > 0 ? sum / count : 0;
+      };
+
+      const pmI = getPMAvg(latestPM, 'Integritas');
+      const pmP = getPMAvg(latestPM, 'Profesional');
+      const pmK = getPMAvg(latestPM, 'Kontributif');
+      const pmT = getPMAvg(latestPM, 'Transformatif');
+
+      const fasilI = parseFloat(latestFasil.get('Skor_Integritas')) || 0;
+      const fasilP = parseFloat(latestFasil.get('Skor_Profesional')) || 0;
+      const fasilK = parseFloat(latestFasil.get('Skor_Kontributif')) || 0;
+      const fasilT = parseFloat(latestFasil.get('Skor_Transformatif')) || 0;
+
+      // Bobot: 70% Fasil, 30% PM (Hanya jika laporan PM ada, jika tidak, 100% Fasil)
+      const blend = (pm, fasil) => {
+        if (pm && fasil) return (fasil * 0.70) + (pm * 0.30);
+        return fasil || pm || 0;
+      };
+
+      const finalI = blend(pmI, fasilI);
+      const finalP = blend(pmP, fasilP);
+      const finalK = blend(pmK, fasilK);
+      const finalT = blend(pmT, fasilT);
+
+      const scores = [finalI, finalP, finalK, finalT].filter(s => s > 0);
+      const avgIPK = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+      evaluationData = {
+        integritas: finalI,
+        profesional: finalP,
+        kontributif: finalK,
+        transformatif: finalT,
+        avg: avgIPK.toFixed(2),
+        rekomendasi: latestFasil.get('Kesimpulan_Rekomendasi'),
+        sanksi_poin: parseInt(latestFasil.get('Total_Poin')) || 0,
+        feedback: latestPM?.get('Official_Feedback') || '',
+        periode: periodeFasilEval
+      };
+    }
+  } catch (err) {
+    console.error("Gagal tarik data evaluasi:", err);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
@@ -86,7 +175,7 @@ export default async function DashboardPM() {
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Dashboard Self-Report</h1>
+              <h1 className="text-2xl font-bold text-gray-800">Portal Evaluasi Etoser</h1>
               <p className="text-gray-500 mt-1">Selamat datang kembali, <span className="font-semibold text-green-600">{user.nama}</span>!</p>
             </div>
             {/* INI TOMBOL LOGOUT-NYA */}
@@ -108,30 +197,17 @@ export default async function DashboardPM() {
           </div>
         </div>
 
-        {/* Status Handling & Render Form */}
-        {statusForm !== 'OPEN' ? (
-          <div className={`border rounded-xl p-8 text-center shadow-sm ${
-            statusForm === 'SUBMITTED' ? 'bg-green-50 border-green-200' : 
-            statusForm === 'ALUMNI' || statusForm === 'FINISHED' ? 'bg-blue-50 border-blue-200' :
-            'bg-red-50 border-red-200'
-          }`}>
-            <h2 className={`text-xl font-bold mb-2 ${
-              statusForm === 'SUBMITTED' ? 'text-green-800' : 
-              statusForm === 'ALUMNI' || statusForm === 'FINISHED' ? 'text-blue-800' :
-              'text-red-800'
-            }`}>
-              {statusForm === 'SUBMITTED' ? 'Laporan Selesai ✅' : 
-               statusForm === 'ALUMNI' || statusForm === 'FINISHED' ? 'Masa Purna 🎓' :
-               statusForm === 'ERROR' ? 'Data Belum Lengkap ⚠️' : 'Form Terkunci 🔒'}
-            </h2>
-            <p className="text-gray-700 font-medium">
-              {pesanStatus}
-            </p>
-          </div>
-        ) : (
-          <FormSelfReport instrumen={instrumen} user={user} tahunPembinaan={tahunPembinaanValid} periode={periodeSekarang} />
-        )}
-
+        {/* Render Form with Evaluation Data */}
+        <FormSelfReport 
+          instrumen={instrumen} 
+          user={user} 
+          tahunPembinaan={tahunPembinaanValid} 
+          periode={periodeSekarang} 
+          statusForm={statusForm}
+          pesanStatus={pesanStatus}
+          evaluationData={evaluationData}
+          adminFeedback={adminFeedback}
+        />
       </div>
     </div>
   );

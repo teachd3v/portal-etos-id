@@ -55,14 +55,7 @@ export default async function AdminDashboard() {
     tahun_pembinaan: row.get('Tahun_Pembinaan') || '-',
   }));
 
-  // 2. Semua laporan PM (semua periode) dengan skor variabel sudah dihitung
-  const allResPM = rowsResPM.map(row => ({
-    id_etoser: row.get('ID_Etoser'),
-    bulan_laporan: row.get('Bulan_Laporan'),
-    pm_int:  getAvg(row, ['A1_Skor','A2_Skor','A3_Skor','A4_Skor','A5_Skor','A6_Skor','A7_Skor','A8_Skor','A9_Skor','A10_Skor']),
-    pm_prof: getAvg(row, ['B1_Skor','B2_Skor','B3_Skor','B4_Skor','B5_Skor','B6_Skor']),
-    pm_trans: getAvg(row, ['C1_Skor','C2_Skor','C3_Skor','C4_Skor']),
-  }));
+  // (Scoring mapping moved below #7 for dynamic context from Data_Instrumen)
 
   // 3. Semua evaluasi fasil dengan periode diturunkan dari Timestamp
   const allResFasil = rowsResFasil.map(row => {
@@ -79,17 +72,10 @@ export default async function AdminDashboard() {
       fasil_trans:       parseFloat(row.get('Skor_Transformatif')) || 0,
       rekomendasi:       row.get('Kesimpulan_Rekomendasi') || 'Belum Dievaluasi',
       total_poin:        parseInt(row.get('Total_Poin')) || 0,
+      feedback_admin:    row.get('Feedback_Admin') || '',
     };
   });
 
-  // 4. Daftar periode unik dari laporan PM, diurutkan kronologis
-  const availablePeriodes = [...new Set(allResPM.map(r => r.bulan_laporan))]
-    .filter(Boolean)
-    .sort((a, b) => {
-      const [mA, yA] = a.split('-');
-      const [mB, yB] = b.split('-');
-      return (parseInt(yA) * 12 + parseInt(mA)) - (parseInt(yB) * 12 + parseInt(mB));
-    });
 
   // 5. Master Fasil
   const allFasil = rowsFasil.map(row => ({
@@ -116,8 +102,89 @@ export default async function AdminDashboard() {
       role_fasil: row.get('Role_Fasil'),
       bulan_laporan: row.get('Bulan_Laporan'),
       avg_skor: countSkor > 0 ? parseFloat((totalSkor / countSkor).toFixed(4)) : 0,
+      official_feedback: row.get('Official_Feedback') || '',
     };
   });
+
+
+  // 7. Tarik Data Instrumen (untuk modal detail)
+  const [sheetInstPM, sheetInstFasil] = await Promise.all([
+    getGoogleSheet('Data_Instrumen'),
+    getGoogleSheet('Instrumen_Fasil'),
+  ]);
+  const [rowsInstPM, rowsInstFasil] = await Promise.all([
+    sheetInstPM.getRows(),
+    sheetInstFasil.getRows(),
+  ]);
+
+  // Mapping Variabel PM dinamik dari Data_Instrumen
+  const pmVarToCodes = {
+    'Integritas': [],
+    'Profesional': [],
+    'Kontributif': [],
+    'Transformatif': [],
+  };
+  
+  rowsInstPM.forEach(r => {
+    const v = r.get('Variabel');
+    const k = r.get('Kode');
+    if (pmVarToCodes[v]) {
+      pmVarToCodes[v].push(`${k}_Skor`);
+    }
+  });
+
+  // Re-map allResPM dengan variabel dinamis
+  const allResPM = rowsResPM.map(row => ({
+    id_etoser: row.get('ID_Etoser'),
+    bulan_laporan: row.get('Bulan_Laporan'),
+    pm_int:    getAvg(row, pmVarToCodes['Integritas']),
+    pm_prof:   getAvg(row, pmVarToCodes['Profesional']),
+    pm_kont:   getAvg(row, pmVarToCodes['Kontributif']),
+    pm_trans:  getAvg(row, pmVarToCodes['Transformatif']),
+    feedback_admin: row.get('Official_Feedback') || '',
+  }));
+
+  // 4. Daftar periode unik dari laporan PM, diurutkan kronologis
+  const availablePeriodes = [...new Set(allResPM.map(r => r.bulan_laporan))]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const [mA, yA] = a.split('-');
+      const [mB, yB] = b.split('-');
+      return (parseInt(yA) * 12 + parseInt(mA)) - (parseInt(yB) * 12 + parseInt(mB));
+    });
+
+  // Buat list instrumen unik untuk prop (ambil yg pertama ketemu)
+  const seenPM = new Set();
+  const instrumentPM = rowsInstPM
+    .map(r => ({
+      kode: r.get('Kode'),
+      item: r.get('Item_Pernyataan'),
+      tahun: r.get('Tahun'),
+    }))
+    .filter(item => {
+      if (!item.kode || seenPM.has(item.kode)) return false;
+      seenPM.add(item.kode);
+      return true;
+    });
+
+  const seenFasil = new Set();
+  const instrumentFasil = rowsInstFasil
+    .map(r => ({
+      kode: r.get('Kode'),
+      item: r.get('Item_Pernyataan'),
+      variabel: r.get('Variabel'),
+    }))
+    .filter(item => {
+      const uniqueKey = `${item.variabel}-${item.kode}`;
+      if (!item.kode || seenFasil.has(uniqueKey)) return false;
+      seenFasil.add(uniqueKey);
+      return true;
+    });
+
+  // 8. Raw Responses (untuk detail view tgl 25-3 / 1-10)
+  // Kita kirim data mentah per row agar client bisa mapping dinamis
+  const rawResponsesPM = rowsResPM.map(r => r.toObject());
+  const rawResponsesSRFasil = rowsSRFasil.map(r => r.toObject());
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -139,8 +206,13 @@ export default async function AdminDashboard() {
           allFasil={allFasil}
           allResSRFasil={allResSRFasil}
           periodeFasil={periodeFasil}
+          instrumentPM={instrumentPM}
+          instrumentFasil={instrumentFasil}
+          rawResponsesPM={rawResponsesPM}
+          rawResponsesSRFasil={rawResponsesSRFasil}
         />
       </div>
     </div>
   );
+
 }

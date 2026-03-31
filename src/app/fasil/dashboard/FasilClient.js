@@ -1,7 +1,8 @@
 // src/app/fasil/dashboard/FasilClient.js
 'use client';
 import { useState } from 'react';
-import { Loader2, CheckCircle2, UserCheck, ChevronRight, Star, AlertTriangle, Lock, Plus, Trash2, BadgeCheck, ClipboardList } from 'lucide-react';
+import { Loader2, CheckCircle2, UserCheck, ChevronRight, Star, AlertTriangle, Lock, Plus, Trash2, BadgeCheck, ClipboardList, LayoutDashboard } from 'lucide-react';
+
 import SelfReportFasilClient from './SelfReportFasilClient';
 
 // --- KOMPONEN BINTANG INTERAKTIF FASIL ---
@@ -42,8 +43,12 @@ const indikatorFasil = [
   { kode: 'Transformatif', label: 'Transformatif', desc: 'PM bersikap terbuka terhadap feedback (saran/kritik), tangguh mencari solusi saat menghadapi kendala, dan menunjukkan perbaikan kualitas diri.' },
 ];
 
-export default function FasilClient({ user, listPM, statusForm, pesanStatus, dataSanksi = [], instrumenFasil = [], sudahSelfReport, statusFormFasil, pesanStatusFasil, periodeFasil }) {
-  const [activeTab, setActiveTab] = useState('peer_review');
+export default function FasilClient({ 
+  user, listPM, statusForm, pesanStatus, dataSanksi = [], 
+  instrumenFasil = [], sudahSelfReport, statusFormFasil, pesanStatusFasil, 
+  periodeFasil, evaluationData, adminFeedback 
+}) {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPM, setSelectedPM] = useState(null);
   const [jawaban, setJawaban] = useState({});
   const [rekomendasi, setRekomendasi] = useState('');
@@ -134,32 +139,117 @@ export default function FasilClient({ user, listPM, statusForm, pesanStatus, dat
         setSukses(true);
         setTimeout(() => { setSelectedPM(null); setSukses(false); setListSanksi([]); }, 3000);
       } else alert('Gagal mengirim data!');
-    } catch (err) { alert('Terjadi kesalahan jaringan.'); } finally { setLoading(false); }
+    } catch { alert('Terjadi kesalahan jaringan.'); } finally { setLoading(false); }
   };
 
   return (
     <div>
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 w-fit">
+      <div className="flex flex-wrap gap-2 mb-6 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 w-full md:w-fit">
         <button
-          onClick={() => setActiveTab('peer_review')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'peer_review' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
           }`}
         >
-          <UserCheck className="w-4 h-4" /> Peer Review PM
+          <LayoutDashboard className="w-4 h-4" /> Dashboard Performa
+        </button>
+        <button
+          onClick={() => setActiveTab('peer_review')}
+          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'peer_review' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" /> Evaluasi PM
         </button>
         <button
           onClick={() => setActiveTab('self_report')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'self_report' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'self_report' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
           }`}
         >
-          <ClipboardList className="w-4 h-4" /> Laporan Bulanan Fasil
+          <ClipboardList className="w-4 h-4" /> Self-Report Fasil
         </button>
       </div>
 
-      {activeTab === 'self_report' ? (
+      {activeTab === 'dashboard' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+           {/* Progress Overview */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Penyelesaian Evaluasi PM</p>
+                <div className="flex items-center gap-4">
+                  <h3 className="text-4xl font-black text-blue-600">
+                    {listPM.length > 0 ? (listPM.filter(p => p.sudah_dinilai).length / listPM.length * 100).toFixed(0) : 0}%
+                  </h3>
+                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 rounded-full transition-all duration-1000" 
+                      style={{ width: `${listPM.length > 0 ? (listPM.filter(p => p.sudah_dinilai).length / listPM.length * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 font-medium">Target: {listPM.length} PM Wilayah {user.wilayah}</p>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Rata-rata Skor Kinerja</p>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-4xl font-black text-indigo-600">{evaluationData?.avg || '—'}</h3>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-indigo-400">Periode:</span>
+                    <span className="text-xs font-black text-indigo-700">{evaluationData?.periode || '-'}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 font-medium">Berdasarkan Instrumen Self-Report Fasil</p>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+                <div className={`p-3 rounded-xl ${sudahSelfReport ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                  {sudahSelfReport ? <CheckCircle2 className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+                </div>
+                <div>
+                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status Laporan Mandiri</p>
+                   <h3 className={`text-lg font-black ${sudahSelfReport ? 'text-green-700' : 'text-red-700'}`}>
+                     {sudahSelfReport ? '✓ Terkirim' : '✗ Belum Lapor'}
+                   </h3>
+                </div>
+              </div>
+           </div>
+
+           {/* Admin Feedback */}
+           <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Star className="w-5 h-5 fill-current" /></div>
+                <h3 className="font-black text-gray-900 text-xl tracking-tight">Catatan dari Management / Admin</h3>
+              </div>
+              
+              <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-6 relative">
+                 <div className="absolute top-[-10px] left-6 bg-white px-3 py-1 rounded-full border border-indigo-100 text-[10px] font-black text-indigo-600 uppercase tracking-widest">Official Feedback</div>
+                 <p className="text-indigo-900 font-bold text-lg leading-relaxed italic">
+                   &quot;{evaluationData?.feedback || "Semangat terus dalam membina Etoser di wilayahmu! Pastikan semua PM mengisi laporan tepat waktu."}&quot;
+                 </p>
+              </div>
+              
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex gap-3">
+                    <ClipboardList className="w-5 h-5 text-gray-400 shrink-0" />
+                    <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                      Lengkapi <strong>Peer Review PM</strong> secara berkala setiap bulan untuk membantu monitoring pusat.
+                    </p>
+                 </div>
+                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex gap-3">
+                    <BadgeCheck className="w-5 h-5 text-gray-400 shrink-0" />
+                    <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                      Gunakan dashboard ini untuk melihat capaian performamu dan poin perbaikan dari management.
+                    </p>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {activeTab === 'self_report' && (
         <SelfReportFasilClient
           user={user}
           instrumenFasil={instrumenFasil}
@@ -167,9 +257,12 @@ export default function FasilClient({ user, listPM, statusForm, pesanStatus, dat
           statusForm={statusFormFasil}
           pesanStatus={pesanStatusFasil}
           periode={periodeFasil}
+          adminFeedback={adminFeedback}
         />
-      ) : (
-    <div className="grid md:grid-cols-3 gap-6">
+      )}
+
+      {activeTab === 'peer_review' && (
+        <div className="grid md:grid-cols-3 gap-6">
 
       {/* --- KOLOM KIRI: DAFTAR PM --- */}
       <div className="md:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-fit">

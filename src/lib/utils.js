@@ -13,28 +13,27 @@ export function getStatusPeriode() {
   let targetBulanLaporan = bulan;
   let targetTahunLaporan = tahun;
 
-  // LOGIKA JENDELA WAKTU (Tgl 25 s.d 7)
+  // LOGIKA JENDELA WAKTU (Tgl 25 s.d 3 bln depannya)
   if (tanggal >= 25) {
     status = 'OPEN';
     targetBulanLaporan = bulan;
-  } else if (tanggal <= 7) {
+  } else if (tanggal <= 3) {
     status = 'OPEN';
     targetBulanLaporan = bulan - 1;
-    // Handle pergantian tahun (Januari isi untuk Desember tahun lalu)
     if (targetBulanLaporan === 0) {
       targetBulanLaporan = 12;
       targetTahunLaporan -= 1;
     }
   } else {
     status = 'CLOSED';
-    pesan = `Masa pengisian laporan sedang ditutup. Form dibuka setiap tanggal 25 hingga tanggal 7. (Saat ini tanggal ${tanggal})`;
+    pesan = `Masa pengisian laporan sedang ditutup. Form dibuka setiap tanggal 25 hingga tanggal 3 bulan depannya. (Saat ini tanggal ${tanggal})`;
     targetBulanLaporan = bulan;
   }
 
   const periodeStr = `${String(targetBulanLaporan).padStart(2, '0')}-${targetTahunLaporan}`;
 
   return {
-    statusForm: 'OPEN',
+    statusForm: status,
     pesanStatus: pesan,
     periode: periodeStr,
     bulanLaporanInt: targetBulanLaporan
@@ -43,25 +42,27 @@ export function getStatusPeriode() {
 
 export function getStatusPeriodeFasil() {
   const sekarang = new Date();
-  // const sekarang = new Date('2026-03-05'); // 💡 Buka ini untuk test masa OPEN
   const tanggal = sekarang.getDate();
   const bulanSekarang = sekarang.getMonth(); // 0-indexed
   const tahunSekarang = sekarang.getFullYear();
 
-  let statusForm, pesanStatus, bulanLaporan, tahunLaporan;
+  let statusForm = 'CLOSED';
+  let pesanStatus = '';
+  let bulanLaporan, tahunLaporan;
 
-  statusForm = 'OPEN'; // DIBUKA PAKSA UNTUK UJI COBA
-  if (true) {
+  // Laporan untuk bulan sebelumnya, Window: tgl 25 s.d tgl 7
+  if (tanggal >= 25) {
     statusForm = 'OPEN';
-    pesanStatus = 'Form laporan bulanan Fasil sedang terbuka (tgl 1-10).';
-    // Laporan untuk bulan sebelumnya
+    bulanLaporan = bulanSekarang + 1;
+    tahunLaporan = tahunSekarang;
+  } else if (tanggal <= 7) {
+    statusForm = 'OPEN';
     const prevDate = new Date(tahunSekarang, bulanSekarang - 1, 1);
-    bulanLaporan = prevDate.getMonth() + 1; // 1-indexed
+    bulanLaporan = prevDate.getMonth() + 1;
     tahunLaporan = prevDate.getFullYear();
   } else {
     statusForm = 'CLOSED';
-    pesanStatus = `Form Laporan Bulanan Fasil hanya dibuka setiap tanggal 1 hingga 10. (Saat ini tanggal ${tanggal})`;
-    // Periode referensi = bulan sebelumnya
+    pesanStatus = `Form Laporan Bulanan Fasil dibuka setiap tanggal 25 hingga tanggal 7 bulan depannya. (Saat ini tanggal ${tanggal})`;
     const prevDate = new Date(tahunSekarang, bulanSekarang - 1, 1);
     bulanLaporan = prevDate.getMonth() + 1;
     tahunLaporan = prevDate.getFullYear();
@@ -71,4 +72,4 @@ export function getStatusPeriodeFasil() {
   const periode = `${bulanStr}-${tahunLaporan}`;
 
   return { statusForm, pesanStatus, periode };
-}
+}

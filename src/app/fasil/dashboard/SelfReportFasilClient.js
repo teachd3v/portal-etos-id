@@ -1,7 +1,7 @@
 // src/app/fasil/dashboard/SelfReportFasilClient.js
 'use client';
 import { useState } from 'react';
-import { Loader2, CheckCircle2, AlertCircle, Star, Lock, BadgeCheck } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Star, Lock, BadgeCheck, ClipboardList } from 'lucide-react';
 
 // --- KOMPONEN BINTANG INTERAKTIF ---
 const StarRating = ({ kode, jenisSkala, currentValue, onChange }) => {
@@ -52,7 +52,7 @@ const StarRating = ({ kode, jenisSkala, currentValue, onChange }) => {
 };
 
 // --- KOMPONEN UTAMA ---
-export default function SelfReportFasilClient({ user, instrumenFasil, sudahSelfReport, statusForm, pesanStatus, periode }) {
+export default function SelfReportFasilClient({ user, instrumenFasil, sudahSelfReport, statusForm, pesanStatus, periode, adminFeedback }) {
   const [jawaban, setJawaban] = useState({});
   const [modal, setModal] = useState({ isOpen: false, type: '', title: '', message: '' });
 
@@ -172,11 +172,17 @@ export default function SelfReportFasilClient({ user, instrumenFasil, sudahSelfR
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white border border-gray-100 rounded-2xl p-4 md:p-6 shadow-sm">
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-6 text-sm text-indigo-800 shadow-sm">
-            <strong>Laporan Bulanan Fasil</strong> — Role:{' '}
-            <span className="font-bold bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded">{user.role_fasil}</span>
-            <br />
-            <em className="mt-1 block text-indigo-600">Jawablah berdasarkan kegiatan yang kamu lakukan dalam satu bulan terakhir.</em>
+          {/* Feedback Section */}
+          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 mb-6 relative">
+             <div className="absolute top-[-10px] left-6 bg-white px-3 py-1 rounded-full border border-indigo-100 text-[10px] font-black text-indigo-600 uppercase tracking-widest">Catatan Management</div>
+             <p className="text-indigo-900 font-bold text-lg leading-relaxed italic">
+               &quot;{adminFeedback || "Semangat terus dalam membina Etoser di wilayahmu! Pastikan semua PM mengisi laporan tepat waktu."}&quot;
+             </p>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 text-sm text-gray-700 shadow-sm flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-indigo-500" />
+            <span>Laporan Bulanan Fasil — Role: <strong>{user.role_fasil}</strong></span>
           </div>
 
           {instrumenFasil.map((item) => {

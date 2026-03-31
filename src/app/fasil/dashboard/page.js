@@ -17,7 +17,7 @@ export default async function DashboardFasil() {
   try {
     user = jwt.verify(token, process.env.JWT_SECRET);
     if (user.role !== 'Fasilitator') redirect('/login');
-  } catch (error) {
+  } catch {
     redirect('/login');
   }
 
@@ -131,51 +131,84 @@ export default async function DashboardFasil() {
     console.error("Gagal menarik Instrumen_Fasil", e);
   }
 
-  // 8. Cek apakah fasil sudah self-report di periode ini
+  // 8. Tarik Data Performa & Feedback Fasil (TAMPILKAN DI DASHBOARD)
+  let evaluationData = null;
   let sudahSelfReport = false;
   try {
     const sheetSR = await getGoogleSheet('Response_Self_Report_Fasil');
     const rowsSR = await sheetSR.getRows();
+    
+    // Check if already self-reported this period
     sudahSelfReport = rowsSR.some(
       row => row.get('ID_Fasil') === user.id && row.get('Bulan_Laporan') === periodeFasil
     );
-  } catch (e) {
-    console.error("Gagal menarik Response_Self_Report_Fasil", e);
-  }
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header Profile Fasil */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 mb-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Portal Evaluasi Fasilitator</h1>
-              <p className="text-gray-500 mt-1">Selamat bertugas, <span className="font-bold text-blue-600">{user.nama}</span>!</p>
+    // Get latest evaluation (for performance dashboard)
+    const myEvals = rowsSR
+      .filter(r => r.get('ID_Fasil') === user.id)
+      .reverse();
+    
+    if (myEvals.length > 0) {
+      const latest = myEvals[0];
+      const scores = [];
+      // Dinamis ambil semua kolom Skor_
+      Object.keys(latest.toObject()).forEach(key => {
+        if (key.startsWith('Skor_')) {
+          scores.push(parseFloat(latest.get(key)) || 0);
+        }
+      });
+      const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+
+      evaluationData = {
+        avg: avg.toFixed(2),
+        feedback: latest.get('Official_Feedback') || '',
+        periode: latest.get('Bulan_Laporan')
+      };
+    }
+
+    const currentPeriodRow = rowsSR.find(
+      r => r.get('ID_Fasil') === user.id && r.get('Bulan_Laporan') === periodeFasil
+    );
+    const adminFeedback = currentPeriodRow?.get('Official_Feedback') || '';
+
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+        <div className="max-w-6xl mx-auto">
+          {/* Header Profile Fasil */}
+          <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 mb-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Portal Evaluasi Fasilitator</h1>
+                <p className="text-gray-500 mt-1">Selamat bertugas, <span className="font-bold text-blue-600">{user.nama}</span>!</p>
+              </div>
+              <LogoutButton />
             </div>
-            <LogoutButton />
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <div className="bg-gray-100 px-3 py-1.5 rounded-md border text-gray-700">ID Fasil: <strong>{user.id}</strong></div>
+              <div className="bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100 text-blue-800">Wilayah Binaan: <strong>{user.wilayah}</strong></div>
+              <div className="bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 text-indigo-800">Periode Aktif: <strong>{periode}</strong></div>
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-3 text-sm">
-            <div className="bg-gray-100 px-3 py-1.5 rounded-md border text-gray-700">ID Fasil: <strong>{user.id}</strong></div>
-            <div className="bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100 text-blue-800">Wilayah Binaan: <strong>{user.wilayah}</strong></div>
-            <div className="bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 text-indigo-800">Periode Aktif: <strong>{periode}</strong></div>
-          </div>
-        </div>
 
-        {/* Komponen Interaktif & Logic Penguncian dilempar ke Client */}
-        <FasilClient
-          user={user}
-          listPM={listPM}
-          statusForm={statusForm}
-          pesanStatus={pesanStatus}
-          dataSanksi={dataSanksi}
-          instrumenFasil={instrumenFasil}
-          sudahSelfReport={sudahSelfReport}
-          statusFormFasil={statusFormFasil}
-          pesanStatusFasil={pesanStatusFasil}
-          periodeFasil={periodeFasil}
-        />
+          <FasilClient
+            user={user}
+            listPM={listPM}
+            statusForm={statusForm}
+            pesanStatus={pesanStatus}
+            dataSanksi={dataSanksi}
+            instrumenFasil={instrumenFasil}
+            sudahSelfReport={sudahSelfReport}
+            statusFormFasil={statusFormFasil}
+            pesanStatusFasil={pesanStatusFasil}
+            periodeFasil={periodeFasil}
+            evaluationData={evaluationData}
+            adminFeedback={adminFeedback}
+          />
+        </div>
       </div>
-    </div>
-  );
+    );
+  } catch (e) {
+    console.error("Gagal menarik data Performa Fasil", e);
+    return <div>Error loading dashboard. Please try again.</div>;
+  }
 }
