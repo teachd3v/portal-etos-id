@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { redirect } from 'next/navigation';
 import { getGoogleSheet } from '@/lib/googleSheets';
-import { getStatusPeriode, getStatusPeriodeFasil } from '@/lib/utils';
+import { getStatusPeriodeFasil } from '@/lib/utils';
 import LogoutButton from '@/app/dashboard/LogoutButton';
 import FasilClient from './FasilClient';
 
@@ -22,10 +22,10 @@ export default async function DashboardFasil() {
     redirect('/login');
   }
 
-  // 2. Cek Status Periode (Jendela Waktu Tgl 25 - 7)
-  const { statusForm, pesanStatus, periode } = getStatusPeriode();
+  // 2. Cek Status Periode Evaluasi PM (Jendela Waktu Tgl 25 - 7)
+  const { statusForm, pesanStatus, periode } = getStatusPeriodeFasil();
 
-  // 2b. Cek Status Periode Self-Report Fasil (Jendela Waktu Tgl 1 - 10)
+  // 2b. Cek Status Periode Self-Report Fasil (Jendela Waktu Tgl 25 - 7)
   const { statusForm: statusFormFasil, pesanStatus: pesanStatusFasil, periode: periodeFasil } = getStatusPeriodeFasil();
 
   // 3. Ambil Relasi_PM dari Users_Fasil (daftar ID PM yang boleh dinilai fasil ini)
@@ -66,13 +66,20 @@ export default async function DashboardFasil() {
 
     rowsResFasil.forEach(row => {
       if (row.get('ID_Fasil') !== user.id) return;
-      // Pakai regex untuk ekstrak tanggal dari format id-ID yang bisa berupa:
-      // "18/3/2026 14.30.00" atau "18/3/2026, 14.30.00"
+
+      // 1. Cek via kolom Bulan_Laporan (Cara baru yang akurat lintas bulan)
+      const bl = row.get('Bulan_Laporan');
+      if (bl === periode) {
+        evaluatedPMIds.add(row.get('ID_Etoser_Dinilai'));
+        return;
+      }
+
+      // 2. Fallback via Timestamp (Untuk data lama yang belum punya kolom Bulan_Laporan)
       const ts = row.get('Timestamp') || '';
       const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (match) {
-        const tsMonth = match[2].padStart(2, '0'); // match[2] = bulan
-        const tsYear = match[3];                   // match[3] = tahun
+        const tsMonth = match[2].padStart(2, '0'); 
+        const tsYear = match[3];                   
         if (tsMonth === periodeMonth && tsYear === periodeYear) {
           evaluatedPMIds.add(row.get('ID_Etoser_Dinilai'));
         }

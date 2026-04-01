@@ -135,16 +135,17 @@ export default function FasilClient({
           catatan_kualitatif: catatanKualitatif,
           sanksi: isUnacceptable ? listSanksi : [],
           total_poin: isUnacceptable ? totalPoin : 0,
+          periode: periodeFasil,
         })
       });
       if (res.ok) {
         setSukses(true);
+        router.refresh(); // Trigger server-side refresh immediately after success
         setTimeout(() => { 
-          router.refresh(); 
           setSelectedPM(null); 
           setSukses(false); 
           setListSanksi([]); 
-        }, 4500);
+        }, 6500); // Increased wait time to 6.5s for Google Sheets sync
       } else alert('Gagal mengirim data!');
     } catch { alert('Terjadi kesalahan jaringan.'); } finally { setLoading(false); }
   };
