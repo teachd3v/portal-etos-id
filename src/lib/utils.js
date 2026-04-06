@@ -17,7 +17,7 @@ export function getStatusPeriode() {
   if (tanggal >= 25) {
     status = 'OPEN';
     targetBulanLaporan = bulan;
-  } else if (tanggal <= 3) {
+  } else if (tanggal <= 7) {
     status = 'OPEN';
     targetBulanLaporan = bulan - 1;
     if (targetBulanLaporan === 0) {
@@ -72,4 +72,4 @@ export function getStatusPeriodeFasil() {
   const periode = `${bulanStr}-${tahunLaporan}`;
 
   return { statusForm, pesanStatus, periode };
-}
+}
