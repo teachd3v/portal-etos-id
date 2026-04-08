@@ -1,6 +1,7 @@
 // src/app/admin/dashboard/AdminClient.js
 'use client';
 import { useState, useMemo, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -10,7 +11,7 @@ import {
 } from 'recharts';
 import {
   Users, FileCheck, AlertTriangle, Search, Filter, BadgeCheck,
-  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2,
+  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2, Download,
 } from 'lucide-react';
 
 
@@ -275,6 +276,23 @@ export default function AdminClient({
     } finally {
       setFeedbackLoading(false);
     }
+  };
+
+  const exportSanksiToExcel = () => {
+    const sanksiData = mergedData.filter(d => d.kena_sanksi);
+    const rows = sanksiData.map(d => ({
+      'ID Etoser': d.id,
+      'Nama PM': d.nama,
+      'Wilayah': d.wilayah,
+      'Angkatan': d.angkatan,
+      'Rekomendasi / Keterangan': d.rekomendasi,
+      'Total Poin Sanksi': d.total_poin,
+      'Daftar Pelanggaran': d.detail_pelanggaran || '-',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Sanksi');
+    XLSX.writeFile(wb, `Rekap_Etoser_Sanksi_${periodeAktif}.xlsx`);
   };
 
   const totalPM      = filteredData.length;
@@ -1029,7 +1047,15 @@ export default function AdminClient({
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-in zoom-in-95 flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-600 shadow-lg">
               <h3 className="text-2xl font-black text-white">Daftar Penerima Sanksi</h3>
-              <button onClick={() => setShowSanksiModal(false)} className="text-white/70 hover:text-white font-bold p-2 hover:bg-white/10 rounded-xl">Close ✕</button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportSanksiToExcel}
+                  className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-2 rounded-xl text-sm transition-colors border border-white/30"
+                >
+                  <Download className="w-4 h-4" /> Export Excel
+                </button>
+                <button onClick={() => setShowSanksiModal(false)} className="text-white/70 hover:text-white font-bold p-2 hover:bg-white/10 rounded-xl">Close ✕</button>
+              </div>
             </div>
             <div className="p-0 overflow-y-auto flex-1">
               <table className="w-full text-left text-sm">
@@ -1038,7 +1064,8 @@ export default function AdminClient({
                     <th className="px-6 py-4">Nama PM</th>
                     <th className="px-6 py-4">Wilayah / Angk.</th>
                     <th className="px-6 py-4 text-center">Poin</th>
-                    <th className="px-6 py-4">Keterangan</th>
+                    <th className="px-6 py-4">Rekomendasi / Keterangan</th>
+                    <th className="px-6 py-4">Daftar Pelanggaran</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-900 font-medium">
@@ -1051,6 +1078,13 @@ export default function AdminClient({
                       <td className="px-6 py-4 font-bold text-gray-600">{d.wilayah}<br/><span className="text-xs font-medium">Angkatan {d.angkatan}</span></td>
                       <td className="px-6 py-4 text-center font-black text-red-600 text-xl">{d.total_poin}</td>
                       <td className="px-6 py-4 text-xs font-black text-red-700 bg-red-50/50">{d.rekomendasi}</td>
+                      <td className="px-6 py-4 text-xs text-gray-600 max-w-[200px]">
+                        {d.detail_pelanggaran
+                          ? d.detail_pelanggaran.split(',').map((p, i) => (
+                              <span key={i} className="block mb-0.5">• {p.trim()}</span>
+                            ))
+                          : <span className="text-gray-400">—</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

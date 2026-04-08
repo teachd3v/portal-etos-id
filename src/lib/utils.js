@@ -2,8 +2,8 @@
 
 export function getStatusPeriode() {
   const sekarang = new Date();
-  // const sekarang = new Date('2026-03-26'); // 💡 Buka ini untuk test masa OPEN
-  
+  //const sekarang = new Date('2026-03-26'); // 💡 Buka ini untuk test masa OPEN
+
   const tanggal = sekarang.getDate();
   let bulan = sekarang.getMonth() + 1;
   let tahun = sekarang.getFullYear();
@@ -42,6 +42,7 @@ export function getStatusPeriode() {
 
 export function getStatusPeriodeFasil() {
   const sekarang = new Date();
+  //const sekarang = new Date('2026-03-26'); // 💡 Buka ini untuk test masa OPEN
   const tanggal = sekarang.getDate();
   const bulanSekarang = sekarang.getMonth(); // 0-indexed
   const tahunSekarang = sekarang.getFullYear();
