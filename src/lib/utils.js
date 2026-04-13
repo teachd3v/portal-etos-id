@@ -1,8 +1,8 @@
 // src/lib/utils.js
 
 export function getStatusPeriode() {
-  //const sekarang = new Date();
-  const sekarang = new Date('2026-04-26'); // 💡 Buka ini untuk test masa OPEN
+  const sekarang = new Date();
+  // const sekarang = new Date('2026-04-26'); // 💡 Buka ini untuk test masa OPEN
 
   const tanggal = sekarang.getDate();
   let bulan = sekarang.getMonth() + 1;
@@ -17,7 +17,7 @@ export function getStatusPeriode() {
   if (tanggal >= 25) {
     status = 'OPEN';
     targetBulanLaporan = bulan;
-  } else if (tanggal <= 7) {
+  } else if (tanggal <= 3) {
     status = 'OPEN';
     targetBulanLaporan = bulan - 1;
     if (targetBulanLaporan === 0) {
@@ -41,8 +41,8 @@ export function getStatusPeriode() {
 }
 
 export function getStatusPeriodeFasil() {
-  //const sekarang = new Date();
-  const sekarang = new Date('2026-04-26'); // 💡 Buka ini untuk test masa OPEN
+  const sekarang = new Date();
+  // const sekarang = new Date('2026-04-26'); // 💡 Buka ini untuk test masa OPEN
   const tanggal = sekarang.getDate();
   const bulanSekarang = sekarang.getMonth(); // 0-indexed
   const tahunSekarang = sekarang.getFullYear();
