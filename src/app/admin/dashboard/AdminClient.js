@@ -11,8 +11,9 @@ import {
 } from 'recharts';
 import {
   Users, FileCheck, AlertTriangle, Search, Filter, BadgeCheck,
-  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2, Download,
+  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2, Download, Mail,
 } from 'lucide-react';
+import BroadcastEmailTab from './BroadcastEmailTab';
 
 
 // Konversi "MM-YYYY" ke integer untuk perbandingan kronologis
@@ -82,8 +83,18 @@ export default function AdminClient({
   allFasil = [], allResSRFasil = [], periodeFasil,
   instrumentPM = [], instrumentFasil = [], rawResponsesPM = [], rawResponsesSRFasil = [],
 }) {
-  // --- GLOBAL TAB ---
-  const [activeTab, setActiveTab] = useState('etoser');
+  // --- GLOBAL TAB (persisted ke localStorage) ---
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('admin_activeTab') || 'etoser';
+    }
+    return 'etoser';
+  });
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    localStorage.setItem('admin_activeTab', tab);
+  };
 
   // --- STATE FILTER ETOSER ---
   const [search, setSearch] = useState('');
@@ -447,7 +458,7 @@ export default function AdminClient({
       {/* === TAB NAVIGASI UTAMA === */}
       <div className="flex gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-200 w-fit">
         <button
-          onClick={() => setActiveTab('etoser')}
+          onClick={() => switchTab('etoser')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             activeTab === 'etoser' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
           }`}
@@ -455,12 +466,20 @@ export default function AdminClient({
           <Users className="w-4 h-4" /> Monitoring Etoser
         </button>
         <button
-          onClick={() => setActiveTab('fasil')}
+          onClick={() => switchTab('fasil')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             activeTab === 'fasil' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
           }`}
         >
           <ClipboardList className="w-4 h-4" /> Kinerja Fasil
+        </button>
+        <button
+          onClick={() => switchTab('broadcast')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'broadcast' ? 'bg-green-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <Mail className="w-4 h-4" /> Broadcast Email
         </button>
       </div>
 
@@ -1115,6 +1134,11 @@ export default function AdminClient({
           </div>
         </div>
       )}
+
+      {/* ================================================================= */}
+      {/* TAB 3: BROADCAST EMAIL                                            */}
+      {/* ================================================================= */}
+      {activeTab === 'broadcast' && <BroadcastEmailTab />}
 
       {/* 3. Modal List Sanksi */}
       {showSanksiModal && (
