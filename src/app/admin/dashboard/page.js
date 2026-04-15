@@ -53,6 +53,7 @@ export default async function AdminDashboard() {
     angkatan: row.get('Angkatan') || '-',
     wilayah: row.get('Wilayah') || '-',
     tahun_pembinaan: row.get('Tahun_Pembinaan') || '-',
+    email: row.get('Email') || '',
   }));
 
   // (Scoring mapping moved below #7 for dynamic context from Data_Instrumen)
@@ -85,6 +86,7 @@ export default async function AdminDashboard() {
     wilayah: row.get('Wilayah_Binaan') || '-',
     role_fasil: row.get('Role') || 'Team Leader',
     relasi_pm: row.get('Relasi_PM') || '',
+    email: row.get('Email') || '',
   }));
 
   // 6. Self-Report Fasil — hitung rata-rata semua _Skor kolom per row

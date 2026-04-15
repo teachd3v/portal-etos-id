@@ -186,7 +186,7 @@ export default function AdminClient({
 
       return {
         id: pm.id, nama: pm.nama, angkatan: pm.angkatan,
-        wilayah: pm.wilayah, tahun_pembinaan: pm.tahun_pembinaan,
+        wilayah: pm.wilayah, tahun_pembinaan: pm.tahun_pembinaan, email: pm.email || '',
         status_lapor_pm:    pmResponses.length > 0,
         status_dinilai_fasil: fasilResponses.length > 0,
         rekomendasi: sanksiLabel,
@@ -293,6 +293,65 @@ export default function AdminClient({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Rekap Sanksi');
     XLSX.writeFile(wb, `Rekap_Etoser_Sanksi_${periodeAktif}.xlsx`);
+  };
+
+  const exportDataEtoserToExcel = () => {
+    const periodeLabel = filterStart === filterEnd
+      ? formatPeriode(filterStart)
+      : `${formatPeriode(filterStart)}-${formatPeriode(filterEnd)}`;
+    const rows = filteredData.map(d => ({
+      'ID': d.id,
+      'Nama': d.nama,
+      'Email': d.email || '-',
+      'Angkatan': d.angkatan,
+      'Wilayah': d.wilayah,
+      'Tahun Pembinaan': d.tahun_pembinaan,
+      'Status Self-Report': d.status_lapor_pm ? 'Sudah Lapor' : 'Belum Lapor',
+      'Status Dinilai Fasil': d.status_dinilai_fasil ? 'Sudah Dinilai' : 'Belum Dinilai',
+      'Skor PM - Integritas': d.pm_int || '-',
+      'Skor PM - Profesional': d.pm_prof || '-',
+      'Skor PM - Kontributif': d.pm_kont || '-',
+      'Skor PM - Transformatif': d.pm_trans || '-',
+      'Skor Fasil - Integritas': d.fasil_int || '-',
+      'Skor Fasil - Profesional': d.fasil_prof || '-',
+      'Skor Fasil - Kontributif': d.fasil_kontributif || '-',
+      'Skor Fasil - Transformatif': d.fasil_trans || '-',
+      'Total Integritas': d.total_int || '-',
+      'Total Profesional': d.total_prof || '-',
+      'Total Kontributif': d.total_kontributif || '-',
+      'Total Transformatif': d.total_trans || '-',
+      'IPK Pembinaan': d.ipk_pembinaan || '-',
+      'Rekomendasi': d.rekomendasi,
+      'Kena Sanksi': d.kena_sanksi ? 'Ya' : 'Tidak',
+      'Total Poin Sanksi': d.total_poin || 0,
+      'Detail Pelanggaran': d.detail_pelanggaran || '-',
+      'Feedback Admin': d.feedback_admin || '-',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data Etoser');
+    XLSX.writeFile(wb, `Data_Etoser_${periodeLabel.replace(' ', '_')}.xlsx`);
+  };
+
+  const exportLeaderboardFasilToExcel = () => {
+    const rows = fasilData.map((f, idx) => ({
+      'Rank': idx + 1,
+      'ID Fasil': f.id,
+      'Nama Fasilitator': f.nama,
+      'Email': f.email || '-',
+      'Wilayah': f.wilayah,
+      'Role': f.role_fasil,
+      'Lapor Mandiri': f.sudah_lapor ? 'Sudah Lapor' : 'Belum Lapor',
+      'PM Dievaluasi': f.total_reviewed,
+      'Total PM Binaan': f.total_assigned,
+      'Progres Evaluasi (%)': parseFloat(f.completion_rate.toFixed(1)),
+      'Rata-rata Skor': f.avg_skor ? parseFloat(f.avg_skor.toFixed(2)) : 0,
+      'Status Performa': f.perf_status.label,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leaderboard Fasil');
+    XLSX.writeFile(wb, `Leaderboard_Fasil_${formatPeriode(periodeFasil).replace(' ', '_')}.xlsx`);
   };
 
   const totalPM      = filteredData.length;
@@ -555,7 +614,15 @@ export default function AdminClient({
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-gray-900 text-lg">Detail Data Etoser</h3>
-              <span className="text-xs font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">{filteredData.length} PM · Skor Maks: 4.00</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">{filteredData.length} PM · Skor Maks: 4.00</span>
+                <button
+                  onClick={exportDataEtoserToExcel}
+                  className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Excel
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -732,9 +799,17 @@ export default function AdminClient({
                 <Medal className="w-5 h-5 text-indigo-600"/>
                 <h3 className="font-bold text-gray-900 text-lg">Leaderboard Kinerja Fasil</h3>
               </div>
-              <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">
-                {totalFasil} Fasil · Periode {formatPeriode(periodeFasil)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">
+                  {totalFasil} Fasil · Periode {formatPeriode(periodeFasil)}
+                </span>
+                <button
+                  onClick={exportLeaderboardFasilToExcel}
+                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Excel
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
