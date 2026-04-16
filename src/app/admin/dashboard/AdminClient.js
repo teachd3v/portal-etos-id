@@ -11,9 +11,10 @@ import {
 } from 'recharts';
 import {
   Users, FileCheck, AlertTriangle, Search, Filter, BadgeCheck,
-  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2, Download, Mail,
+  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2, Download, Mail, CalendarCheck,
 } from 'lucide-react';
 import BroadcastEmailTab from './BroadcastEmailTab';
+import AbsensiPembinaanTab from './AbsensiPembinaanTab';
 
 
 // Konversi "MM-YYYY" ke integer untuk perbandingan kronologis
@@ -82,14 +83,16 @@ export default function AdminClient({
   periodeAktif, allPM, allResPM, allResFasil, availablePeriodes,
   allFasil = [], allResSRFasil = [], periodeFasil,
   instrumentPM = [], instrumentFasil = [], rawResponsesPM = [], rawResponsesSRFasil = [],
+  agendas = [],
 }) {
   // --- GLOBAL TAB (persisted ke localStorage) ---
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('admin_activeTab') || 'etoser';
-    }
-    return 'etoser';
-  });
+  // Selalu init dengan 'etoser' agar SSR & client render match (hindari hydration mismatch),
+  // lalu baca localStorage setelah mount via useEffect.
+  const [activeTab, setActiveTab] = useState('etoser');
+  useEffect(() => {
+    const saved = localStorage.getItem('admin_activeTab');
+    if (saved) setActiveTab(saved);
+  }, []);
 
   const switchTab = (tab) => {
     setActiveTab(tab);
@@ -103,6 +106,11 @@ export default function AdminClient({
   const [filterStart, setFilterStart] = useState(periodeAktif);
   const [filterEnd, setFilterEnd] = useState(periodeAktif);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // --- STATE FILTER FASIL ---
+  const [filterFasilWilayah, setFilterFasilWilayah] = useState('Semua');
+  const [filterFasilStart, setFilterFasilStart] = useState(periodeFasil);
+  const [filterFasilEnd, setFilterFasilEnd] = useState(periodeFasil);
   const ITEMS_PER_PAGE = 50;
 
   // --- STATE MODAL DETAIL ---
@@ -140,6 +148,17 @@ export default function AdminClient({
   const periodeOptions = useMemo(() => {
     return availablePeriodes.length > 0 ? availablePeriodes : [periodeAktif];
   }, [availablePeriodes, periodeAktif]);
+
+  const listWilayahFasil = ['Semua', ...new Set(allFasil.map(f => f.wilayah))];
+  const periodeOptionsFasil = useMemo(() => {
+    const periods = [...new Set(allResSRFasil.map(r => r.bulan_laporan))]
+      .filter(Boolean)
+      .sort((a, b) => {
+        const [mA, yA] = a.split('-'); const [mB, yB] = b.split('-');
+        return (parseInt(yA) * 12 + parseInt(mA)) - (parseInt(yB) * 12 + parseInt(mB));
+      });
+    return periods.length > 0 ? periods : [periodeFasil];
+  }, [allResSRFasil, periodeFasil]);
 
   // --- MERGED DATA ETOSER ---
   const mergedData = useMemo(() => {
@@ -362,7 +381,7 @@ export default function AdminClient({
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Leaderboard Fasil');
-    XLSX.writeFile(wb, `Leaderboard_Fasil_${formatPeriode(periodeFasil).replace(' ', '_')}.xlsx`);
+    XLSX.writeFile(wb, `Leaderboard_Fasil_${formatPeriode(filterFasilEnd).replace(' ', '_')}.xlsx`);
   };
 
   const totalPM      = filteredData.length;
@@ -389,11 +408,17 @@ export default function AdminClient({
 
   // --- DATA FASIL ---
   const fasilData = useMemo(() => {
+    const startInt = periodeToInt(filterFasilStart);
+    const endInt   = periodeToInt(filterFasilEnd);
+
     return allFasil
+      .filter(fasil => filterFasilWilayah === 'Semua' || fasil.wilayah === filterFasilWilayah)
       .map(fasil => {
-        // 1. Laporan Mandiri (Self-Report)
+        // 1. Laporan Mandiri (Self-Report) — dalam range periode filter
         const srResponses = allResSRFasil.filter(
-          r => r.id_fasil === fasil.id && r.bulan_laporan === periodeFasil
+          r => r.id_fasil === fasil.id &&
+               periodeToInt(r.bulan_laporan) >= startInt &&
+               periodeToInt(r.bulan_laporan) <= endInt
         );
         const latestSR = srResponses.length > 0 ? srResponses[srResponses.length - 1] : null;
 
@@ -440,7 +465,7 @@ export default function AdminClient({
         };
       })
       .sort((a, b) => b.completion_rate - a.completion_rate || b.avg_skor - a.avg_skor);
-  }, [allFasil, allResSRFasil, allResFasil, allPM, periodeAktif, periodeFasil]);
+  }, [allFasil, allResSRFasil, allResFasil, allPM, periodeAktif, periodeFasil, filterFasilWilayah, filterFasilStart, filterFasilEnd]);
 
   const totalFasil        = fasilData.length;
   const fasilSudahLapor   = fasilData.filter(f => f.sudah_lapor).length;
@@ -480,6 +505,14 @@ export default function AdminClient({
           }`}
         >
           <Mail className="w-4 h-4" /> Broadcast Email
+        </button>
+        <button
+          onClick={() => switchTab('absensi')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'absensi' ? 'bg-orange-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <CalendarCheck className="w-4 h-4" /> Absensi Pembinaan
         </button>
       </div>
 
@@ -729,12 +762,42 @@ export default function AdminClient({
       {/* ================================================================= */}
       {activeTab === 'fasil' && (
         <>
-          {/* Info periode */}
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-sm font-bold px-4 py-2 rounded-xl">
-              Periode Laporan Fasil: <span className="text-indigo-900">{formatPeriode(periodeFasil)}</span>
+          {/* PANEL FILTER FASIL */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+            <div className="flex items-center gap-2 font-bold text-gray-800 mb-4">
+              <Filter className="w-5 h-5 text-indigo-600"/> Filter Data
             </div>
-            <p className="text-xs text-gray-400 font-medium">Window pengisian: tgl 1–10 setiap bulan</p>
+            <div className="flex flex-col md:flex-row gap-3 flex-wrap">
+              <select
+                className="w-full md:w-48 px-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900 shadow-sm cursor-pointer"
+                value={filterFasilWilayah} onChange={e => setFilterFasilWilayah(e.target.value)}
+              >
+                {listWilayahFasil.map(w => <option key={w} value={w}>{w === 'Semua' ? 'Semua Wilayah' : w}</option>)}
+              </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Dari</span>
+                <select
+                  className="px-3 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900 shadow-sm cursor-pointer"
+                  value={filterFasilStart} onChange={e => {
+                    setFilterFasilStart(e.target.value);
+                    if (periodeToInt(e.target.value) > periodeToInt(filterFasilEnd)) setFilterFasilEnd(e.target.value);
+                  }}
+                >
+                  {periodeOptionsFasil.map(p => <option key={p} value={p}>{formatPeriode(p)}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Sampai</span>
+                <select
+                  className="px-3 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900 shadow-sm cursor-pointer"
+                  value={filterFasilEnd} onChange={e => setFilterFasilEnd(e.target.value)}
+                >
+                  {periodeOptionsFasil.filter(p => periodeToInt(p) >= periodeToInt(filterFasilStart)).map(p => (
+                    <option key={p} value={p}>{formatPeriode(p)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* 3 WIDGET FASIL */}
@@ -806,7 +869,7 @@ export default function AdminClient({
               </div>
             ) : (
               <div className="h-48 flex items-center justify-center text-gray-400 text-sm font-medium">
-                Belum ada Fasil yang mengisi laporan untuk periode {formatPeriode(periodeFasil)}.
+                Belum ada Fasil yang mengisi laporan untuk periode yang dipilih.
               </div>
             )}
           </div>
@@ -820,7 +883,7 @@ export default function AdminClient({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">
-                  {totalFasil} Fasil · Periode {formatPeriode(periodeFasil)}
+                  {totalFasil} Fasil · {filterFasilStart === filterFasilEnd ? formatPeriode(filterFasilEnd) : `${formatPeriode(filterFasilStart)} – ${formatPeriode(filterFasilEnd)}`}
                 </span>
                 <button
                   onClick={exportLeaderboardFasilToExcel}
@@ -1139,6 +1202,11 @@ export default function AdminClient({
       {/* TAB 3: BROADCAST EMAIL                                            */}
       {/* ================================================================= */}
       {activeTab === 'broadcast' && <BroadcastEmailTab />}
+
+      {/* ================================================================= */}
+      {/* TAB 4: ABSENSI PEMBINAAN                                           */}
+      {/* ================================================================= */}
+      {activeTab === 'absensi' && <AbsensiPembinaanTab initialAgendas={agendas} />}
 
       {/* 3. Modal List Sanksi */}
       {showSanksiModal && (

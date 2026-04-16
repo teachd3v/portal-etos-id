@@ -24,7 +24,7 @@ export default function Home() {
             </span>
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto font-medium leading-relaxed">
-            Platform pelaporan instrumen evaluasi bulanan yang terintegrasi untuk Etoser, pemantauan Fasilitator, dan analisis data pusat.
+            Platform pelaporan instrumen evaluasi bulanan yang terintegrasi untuk Etoser, pemantauan Fasilitator, dan analisis data nasional.
           </p>
         </div>
 
