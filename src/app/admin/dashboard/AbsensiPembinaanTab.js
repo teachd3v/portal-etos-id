@@ -1,7 +1,7 @@
 'use client';
 // src/app/admin/dashboard/AbsensiPembinaanTab.js
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Eye, CalendarCheck, ToggleLeft, ToggleRight, X, Users } from 'lucide-react';
+import { Plus, Trash2, Eye, CalendarCheck, ToggleLeft, ToggleRight, X, Users, KeyRound } from 'lucide-react';
 
 // ================================================================
 // KONSTANTA DATA TOPIK
@@ -153,6 +153,11 @@ export default function AbsensiPembinaanTab({ initialAgendas = [] }) {
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
+  // State untuk delete absensi
+  const [deleteAbsensiTarget, setDeleteAbsensiTarget] = useState(null); // { absensi, type }
+  const [deleteAbsensiPassword, setDeleteAbsensiPassword] = useState('');
+  const [deleteAbsensiLoading, setDeleteAbsensiLoading] = useState(false);
+  const [deleteAbsensiError, setDeleteAbsensiError] = useState('');
 
   // Ambil daftar absensi saat viewTarget berubah
   // Pusat → /api/absensi  |  Wilayah → /api/absensi-wilayah?type=all
@@ -298,6 +303,43 @@ export default function AbsensiPembinaanTab({ initialAgendas = [] }) {
       setDeleteTarget(null);
     } catch { alert('Terjadi kesalahan. Coba lagi.'); }
     finally { setActionLoading(null); }
+  };
+
+  // === HAPUS SATU ENTRI ABSENSI (dengan verifikasi password) ===
+  const handleDeleteAbsensi = async () => {
+    if (!deleteAbsensiTarget || !deleteAbsensiPassword.trim()) {
+      setDeleteAbsensiError('Password tidak boleh kosong.');
+      return;
+    }
+    setDeleteAbsensiLoading(true);
+    setDeleteAbsensiError('');
+    try {
+      const { absensi, type } = deleteAbsensiTarget;
+      const res = await fetch('/api/admin/absensi/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_etoser: absensi.id_etoser,
+          id_agenda: viewTarget.id,
+          timestamp: absensi.timestamp,
+          password: deleteAbsensiPassword,
+          type,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleteAbsensiError(data.message || 'Gagal menghapus.');
+        return;
+      }
+      // Hapus dari state lokal
+      setAbsensiList(prev => prev.filter(a => a !== absensi));
+      setDeleteAbsensiTarget(null);
+      setDeleteAbsensiPassword('');
+    } catch {
+      setDeleteAbsensiError('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      setDeleteAbsensiLoading(false);
+    }
   };
 
   return (
@@ -697,11 +739,12 @@ export default function AbsensiPembinaanTab({ initialAgendas = [] }) {
                           </>
                         )}
                         <th className="px-5 py-3">Waktu Input</th>
+                        <th className="px-5 py-3 text-center">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {absensiList.map((a, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
+                        <tr key={i} className="hover:bg-red-50/30 group">
                           <td className="px-5 py-3 text-gray-400 text-xs text-center">{i + 1}</td>
                           <td className="px-5 py-3 font-bold text-gray-800">{a.nama}</td>
                           <td className="px-5 py-4 text-gray-600 font-mono text-xs">{a.id_etoser}</td>
@@ -714,6 +757,22 @@ export default function AbsensiPembinaanTab({ initialAgendas = [] }) {
                             </>
                           )}
                           <td className="px-5 py-3 text-gray-400 text-[11px] leading-tight">{a.timestamp}</td>
+                          <td className="px-5 py-3 text-center">
+                            <button
+                              onClick={() => {
+                                setDeleteAbsensiTarget({
+                                  absensi: a,
+                                  type: viewTarget.pelaksana === 'Wilayah' ? 'wilayah' : 'nasional',
+                                });
+                                setDeleteAbsensiPassword('');
+                                setDeleteAbsensiError('');
+                              }}
+                              title="Hapus absensi ini"
+                              className="p-1.5 rounded-lg text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -727,6 +786,73 @@ export default function AbsensiPembinaanTab({ initialAgendas = [] }) {
                 className="w-full py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors"
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: KONFIRMASI HAPUS ABSENSI (dengan verifikasi password)  */}
+      {/* ============================================================ */}
+      {deleteAbsensiTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            {/* Icon */}
+            <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <KeyRound className="w-6 h-6 text-red-500" />
+            </div>
+
+            <h3 className="font-black text-gray-800 text-center mb-1">Hapus Data Absensi?</h3>
+            <p className="text-sm text-gray-500 text-center mb-4">
+              Kamu akan menghapus absensi{' '}
+              <span className="font-bold text-gray-700">{deleteAbsensiTarget.absensi.nama}</span>
+              {' '}({deleteAbsensiTarget.absensi.id_etoser}).
+            </p>
+
+            {/* Warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-4">
+              <p className="text-xs font-bold text-amber-700">
+                ⚠️ Tindakan ini permanen dan tidak dapat dibatalkan.
+              </p>
+            </div>
+
+            {/* Input Password */}
+            <div className="mb-4">
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">
+                Verifikasi Password Akun Admin
+              </label>
+              <input
+                type="password"
+                value={deleteAbsensiPassword}
+                onChange={(e) => { setDeleteAbsensiPassword(e.target.value); setDeleteAbsensiError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleDeleteAbsensi()}
+                placeholder="Masukkan password akunmu..."
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none text-sm text-gray-800 placeholder:text-gray-400"
+                autoFocus
+              />
+              {deleteAbsensiError && (
+                <p className="text-xs text-red-600 mt-2 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                  {deleteAbsensiError}
+                </p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setDeleteAbsensiTarget(null); setDeleteAbsensiPassword(''); setDeleteAbsensiError(''); }}
+                disabled={deleteAbsensiLoading}
+                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleDeleteAbsensi}
+                disabled={deleteAbsensiLoading || !deleteAbsensiPassword.trim()}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-bold transition-colors"
+              >
+                {deleteAbsensiLoading ? 'Menghapus...' : 'Hapus'}
               </button>
             </div>
           </div>
