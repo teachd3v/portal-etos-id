@@ -6,6 +6,8 @@ export const metadata = {
   title: 'Absensi Pembinaan Nasional — Etos ID',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default async function AbsenPembinaanPage() {
   // Halaman publik — tidak memerlukan autentikasi
 

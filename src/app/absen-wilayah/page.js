@@ -6,6 +6,8 @@ export const metadata = {
   title: 'Absensi Pembinaan Wilayah — Etos ID',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default async function AbsenWilayahPage() {
   // Halaman publik — tidak memerlukan autentikasi
   // Fetch daftar agenda Wilayah yang aktif di server untuk pass ke client
