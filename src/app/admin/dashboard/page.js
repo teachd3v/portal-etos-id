@@ -57,14 +57,19 @@ export default async function AdminDashboard() {
 
   // (Scoring mapping moved below #7 for dynamic context from Data_Instrumen)
 
-  // 3. Semua evaluasi fasil dengan periode diturunkan dari Timestamp
+  // 3. Semua evaluasi fasil dengan periode dari kolom Bulan_Laporan (prioritas) atau Timestamp
   const allResFasil = rowsResFasil.map(row => {
-    const ts = row.get('Timestamp') || '';
-    const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    const periode_fasil = match ? `${match[2].padStart(2, '0')}-${match[3]}` : '';
+    let periode_fasil = (row.get('Bulan_Laporan') || '').trim();
+    
+    if (!periode_fasil) {
+      const ts = row.get('Timestamp') || '';
+      const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      periode_fasil = match ? `${match[2].padStart(2, '0')}-${match[3]}` : '';
+    }
+
     return {
-      id_fasil:          row.get('ID_Fasil'),
-      id_etoser_dinilai: row.get('ID_Etoser_Dinilai'),
+      id_fasil:          (row.get('ID_Fasil') || '').trim(),
+      id_etoser_dinilai: (row.get('ID_Etoser_Dinilai') || '').trim(),
       periode_fasil,
       fasil_int:         parseFloat(row.get('Skor_Integritas'))  || 0,
       fasil_prof:        parseFloat(row.get('Skor_Profesional')) || 0,
@@ -134,10 +139,10 @@ export default async function AdminDashboard() {
     }
   });
 
-  // Re-map allResPM dengan variabel dinamis
+  // Re-map allResPM dengan variabel dinamis & trim ID
   const allResPM = rowsResPM.map(row => ({
-    id_etoser: row.get('ID_Etoser'),
-    bulan_laporan: row.get('Bulan_Laporan'),
+    id_etoser: (row.get('ID_Etoser') || '').trim(),
+    bulan_laporan: (row.get('Bulan_Laporan') || '').trim(),
     pm_int:    getAvg(row, pmVarToCodes['Integritas']),
     pm_prof:   getAvg(row, pmVarToCodes['Profesional']),
     pm_kont:   getAvg(row, pmVarToCodes['Kontributif']),
@@ -145,8 +150,11 @@ export default async function AdminDashboard() {
     feedback_admin: row.get('Official_Feedback') || '',
   }));
 
-  // 4. Daftar periode unik dari laporan PM, diurutkan kronologis
-  const availablePeriodes = [...new Set(allResPM.map(r => r.bulan_laporan))]
+  // 4. Daftar periode unik, pastikan menyertakan periodeAktif agar filter tidak kosong
+  const periodSet = new Set(allResPM.map(r => r.bulan_laporan));
+  if (periode) periodSet.add(periode);
+
+  const availablePeriodes = Array.from(periodSet)
     .filter(Boolean)
     .sort((a, b) => {
       const [mA, yA] = a.split('-');

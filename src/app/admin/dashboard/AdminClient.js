@@ -135,8 +135,9 @@ export default function AdminClient({
     const endInt   = periodeToInt(filterEnd);
 
     return allPM.map(pm => {
+      const pmId = String(pm.id || '').trim();
       const pmResponses = allResPM.filter(r =>
-        String(r.id_etoser) === String(pm.id) &&
+        String(r.id_etoser).trim() === pmId &&
         periodeToInt(r.bulan_laporan) >= startInt &&
         periodeToInt(r.bulan_laporan) <= endInt
       );
@@ -144,8 +145,13 @@ export default function AdminClient({
       const pmTargetRow = pmResponses.find(r => r.bulan_laporan === filterEnd);
       const latestPM = pmTargetRow || (pmResponses.length > 0 ? pmResponses[pmResponses.length - 1] : null);
 
-      const fasilResponses = allResFasil.filter(r => String(r.id_etoser_dinilai) === String(pm.id));
-      const latestFasil = fasilResponses.length > 0 ? fasilResponses[fasilResponses.length - 1] : null;
+      const fasilResponses = allResFasil.filter(r => 
+        String(r.id_etoser_dinilai).trim() === pmId &&
+        periodeToInt(r.periode_fasil) >= startInt &&
+        periodeToInt(r.periode_fasil) <= endInt
+      );
+      const fasilTargetRow = fasilResponses.find(r => r.periode_fasil === filterEnd);
+      const latestFasil = fasilTargetRow || (fasilResponses.length > 0 ? fasilResponses[fasilResponses.length - 1] : null);
 
       const pm_int   = latestPM?.pm_int   || 0;
       const pm_prof  = latestPM?.pm_prof  || 0;
