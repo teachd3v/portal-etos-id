@@ -53,6 +53,7 @@ export default async function AdminDashboard() {
     angkatan: row.get('Angkatan') || '-',
     wilayah: row.get('Wilayah') || '-',
     tahun_pembinaan: row.get('Tahun_Pembinaan') || '-',
+    email: row.get('Email') || '',
   }));
 
   // (Scoring mapping moved below #7 for dynamic context from Data_Instrumen)
@@ -90,6 +91,7 @@ export default async function AdminDashboard() {
     wilayah: row.get('Wilayah_Binaan') || '-',
     role_fasil: row.get('Role') || 'Team Leader',
     relasi_pm: row.get('Relasi_PM') || '',
+    email: row.get('Email') || '',
   }));
 
   // 6. Self-Report Fasil — hitung rata-rata semua _Skor kolom per row
@@ -195,12 +197,47 @@ export default async function AdminDashboard() {
   const rawResponsesPM = rowsResPM.map(r => r.toObject());
   const rawResponsesSRFasil = rowsSRFasil.map(r => r.toObject());
 
+  // 9. Agenda Pembinaan (Nasional & Wilayah)
+  let agendas = [];
+  try {
+    const [sheetNasional, sheetWilayah] = await Promise.all([
+      getGoogleSheet('Agenda_Nasional').catch(() => null),
+      getGoogleSheet('Agenda_Wilayah').catch(() => null),
+    ]);
+
+    const nasionalAgendas = sheetNasional ? (await sheetNasional.getRows()).map(row => ({
+      id: row.get('ID_Agenda'),
+      nama: row.get('Nama_Agenda'),
+      deskripsi: row.get('Deskripsi') || '',
+      tanggal: row.get('Tanggal') || '',
+      is_active: row.get('Is_Active') === 'TRUE',
+      pelaksana: 'Nasional',
+      jenis_aktivitas: row.get('Jenis_Aktivitas') || '',
+      tema: row.get('Tema') || '',
+    })) : [];
+
+    const wilayahAgendas = sheetWilayah ? (await sheetWilayah.getRows()).map(row => ({
+      id: row.get('ID_Agenda'),
+      nama: row.get('Nama_Agenda'),
+      deskripsi: '',
+      tanggal: '',
+      is_active: row.get('Is_Active') === 'TRUE',
+      pelaksana: 'Wilayah',
+      jenis_aktivitas: row.get('Jenis_Aktivitas') || '',
+      tema: row.get('Tema') || '',
+    })) : [];
+
+    agendas = [...nasionalAgendas, ...wilayahAgendas].reverse();
+  } catch (err) {
+    console.error('Gagal mengambil data agenda:', err);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-[1400px] mx-auto">
         <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 mb-6 flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Executive Dashboard Pusat</h1>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Executive Dashboard Nasional</h1>
             <p className="text-gray-500 font-medium mt-1">Monitoring & Evaluasi Laporan Bulanan Etos ID</p>
           </div>
           <LogoutButton />
@@ -219,6 +256,7 @@ export default async function AdminDashboard() {
           instrumentFasil={instrumentFasil}
           rawResponsesPM={rawResponsesPM}
           rawResponsesSRFasil={rawResponsesSRFasil}
+          agendas={agendas}
         />
       </div>
     </div>

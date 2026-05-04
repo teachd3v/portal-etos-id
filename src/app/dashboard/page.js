@@ -160,8 +160,6 @@ export default async function DashboardPM() {
         transformatif: finalT,
         avg: avgIPK.toFixed(2),
         rekomendasi: latestFasil.get('Kesimpulan_Rekomendasi'),
-        sanksi_poin: parseInt(latestFasil.get('Total_Poin')) || 0,
-        detail_pelanggaran: latestFasil.get('Detail_Pelanggaran') || '',
         catatan_kualitatif: latestFasil.get('Catatan_Kualitatif') || '',
         feedback: latestPM?.get('Official_Feedback') || '',
         periode: periodeFasilEval

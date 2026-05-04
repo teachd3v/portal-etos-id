@@ -1,6 +1,7 @@
 // src/app/admin/dashboard/AdminClient.js
 'use client';
 import { useState, useMemo, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -10,8 +11,10 @@ import {
 } from 'recharts';
 import {
   Users, FileCheck, AlertTriangle, Search, Filter, BadgeCheck,
-  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2,
+  ShieldAlert, TrendingUp, ClipboardList, Star, Medal, Eye, CheckCircle2, Download, Mail, CalendarCheck,
 } from 'lucide-react';
+import BroadcastEmailTab from './BroadcastEmailTab';
+import AbsensiPembinaanTab from './AbsensiPembinaanTab';
 
 
 // Konversi "MM-YYYY" ke integer untuk perbandingan kronologis
@@ -80,9 +83,21 @@ export default function AdminClient({
   periodeAktif, allPM, allResPM, allResFasil, availablePeriodes,
   allFasil = [], allResSRFasil = [], periodeFasil,
   instrumentPM = [], instrumentFasil = [], rawResponsesPM = [], rawResponsesSRFasil = [],
+  agendas = [],
 }) {
-  // --- GLOBAL TAB ---
+  // --- GLOBAL TAB (persisted ke localStorage) ---
+  // Selalu init dengan 'etoser' agar SSR & client render match (hindari hydration mismatch),
+  // lalu baca localStorage setelah mount via useEffect.
   const [activeTab, setActiveTab] = useState('etoser');
+  useEffect(() => {
+    const saved = localStorage.getItem('admin_activeTab');
+    if (saved) setActiveTab(saved);
+  }, []);
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    localStorage.setItem('admin_activeTab', tab);
+  };
 
   // --- STATE FILTER ETOSER ---
   const [search, setSearch] = useState('');
@@ -91,6 +106,11 @@ export default function AdminClient({
   const [filterStart, setFilterStart] = useState(periodeAktif);
   const [filterEnd, setFilterEnd] = useState(periodeAktif);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // --- STATE FILTER FASIL ---
+  const [filterFasilWilayah, setFilterFasilWilayah] = useState('Semua');
+  const [filterFasilStart, setFilterFasilStart] = useState(periodeFasil);
+  const [filterFasilEnd, setFilterFasilEnd] = useState(periodeFasil);
   const ITEMS_PER_PAGE = 50;
 
   // --- STATE MODAL DETAIL ---
@@ -128,6 +148,17 @@ export default function AdminClient({
   const periodeOptions = useMemo(() => {
     return availablePeriodes.length > 0 ? availablePeriodes : [periodeAktif];
   }, [availablePeriodes, periodeAktif]);
+
+  const listWilayahFasil = ['Semua', ...new Set(allFasil.map(f => f.wilayah))];
+  const periodeOptionsFasil = useMemo(() => {
+    const periods = [...new Set(allResSRFasil.map(r => r.bulan_laporan))]
+      .filter(Boolean)
+      .sort((a, b) => {
+        const [mA, yA] = a.split('-'); const [mB, yB] = b.split('-');
+        return (parseInt(yA) * 12 + parseInt(mA)) - (parseInt(yB) * 12 + parseInt(mB));
+      });
+    return periods.length > 0 ? periods : [periodeFasil];
+  }, [allResSRFasil, periodeFasil]);
 
   // --- MERGED DATA ETOSER ---
   const mergedData = useMemo(() => {
@@ -191,7 +222,7 @@ export default function AdminClient({
 
       return {
         id: pm.id, nama: pm.nama, angkatan: pm.angkatan,
-        wilayah: pm.wilayah, tahun_pembinaan: pm.tahun_pembinaan,
+        wilayah: pm.wilayah, tahun_pembinaan: pm.tahun_pembinaan, email: pm.email || '',
         status_lapor_pm:    pmResponses.length > 0,
         status_dinilai_fasil: fasilResponses.length > 0,
         rekomendasi: sanksiLabel,
@@ -283,6 +314,82 @@ export default function AdminClient({
     }
   };
 
+  const exportSanksiToExcel = () => {
+    const sanksiData = mergedData.filter(d => d.kena_sanksi);
+    const rows = sanksiData.map(d => ({
+      'ID Etoser': d.id,
+      'Nama PM': d.nama,
+      'Wilayah': d.wilayah,
+      'Angkatan': d.angkatan,
+      'Rekomendasi / Keterangan': d.rekomendasi,
+      'Total Poin Sanksi': d.total_poin,
+      'Daftar Pelanggaran': d.detail_pelanggaran || '-',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Sanksi');
+    XLSX.writeFile(wb, `Rekap_Etoser_Sanksi_${periodeAktif}.xlsx`);
+  };
+
+  const exportDataEtoserToExcel = () => {
+    const periodeLabel = filterStart === filterEnd
+      ? formatPeriode(filterStart)
+      : `${formatPeriode(filterStart)}-${formatPeriode(filterEnd)}`;
+    const rows = filteredData.map(d => ({
+      'ID': d.id,
+      'Nama': d.nama,
+      'Email': d.email || '-',
+      'Angkatan': d.angkatan,
+      'Wilayah': d.wilayah,
+      'Tahun Pembinaan': d.tahun_pembinaan,
+      'Status Self-Report': d.status_lapor_pm ? 'Sudah Lapor' : 'Belum Lapor',
+      'Status Dinilai Fasil': d.status_dinilai_fasil ? 'Sudah Dinilai' : 'Belum Dinilai',
+      'Skor PM - Integritas': d.pm_int || '-',
+      'Skor PM - Profesional': d.pm_prof || '-',
+      'Skor PM - Kontributif': d.pm_kont || '-',
+      'Skor PM - Transformatif': d.pm_trans || '-',
+      'Skor Fasil - Integritas': d.fasil_int || '-',
+      'Skor Fasil - Profesional': d.fasil_prof || '-',
+      'Skor Fasil - Kontributif': d.fasil_kontributif || '-',
+      'Skor Fasil - Transformatif': d.fasil_trans || '-',
+      'Total Integritas': d.total_int || '-',
+      'Total Profesional': d.total_prof || '-',
+      'Total Kontributif': d.total_kontributif || '-',
+      'Total Transformatif': d.total_trans || '-',
+      'IPK Pembinaan': d.ipk_pembinaan || '-',
+      'Rekomendasi': d.rekomendasi,
+      'Kena Sanksi': d.kena_sanksi ? 'Ya' : 'Tidak',
+      'Total Poin Sanksi': d.total_poin || 0,
+      'Detail Pelanggaran': d.detail_pelanggaran || '-',
+      'Feedback Admin': d.feedback_admin || '-',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data Etoser');
+    XLSX.writeFile(wb, `Data_Etoser_${periodeLabel.replace(' ', '_')}.xlsx`);
+  };
+
+  const exportLeaderboardFasilToExcel = () => {
+    const rows = fasilData.map((f, idx) => ({
+      'Rank': idx + 1,
+      'ID Fasil': f.id,
+      'Nama Fasilitator': f.nama,
+      'Email': f.email || '-',
+      'Wilayah': f.wilayah,
+      'Role': f.role_fasil,
+      'Lapor Mandiri': f.sudah_lapor ? 'Sudah Lapor' : 'Belum Lapor',
+      'PM Dievaluasi': f.total_reviewed,
+      'Total PM Binaan': f.total_assigned,
+      'Progres Evaluasi (%)': parseFloat(f.completion_rate.toFixed(1)),
+      'Rata-rata Skor': f.avg_skor ? parseFloat(f.avg_skor.toFixed(2)) : 0,
+      'Status Performa': f.perf_status.label,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leaderboard Fasil');
+    XLSX.writeFile(wb, `Leaderboard_Fasil_${formatPeriode(filterFasilEnd).replace(' ', '_')}.xlsx`);
+  };
+
   const totalPM      = filteredData.length;
   const sudahLapor   = filteredData.filter(d => d.status_lapor_pm).length;
   const sudahDinilai = filteredData.filter(d => d.status_dinilai_fasil).length;
@@ -307,11 +414,17 @@ export default function AdminClient({
 
   // --- DATA FASIL ---
   const fasilData = useMemo(() => {
+    const startInt = periodeToInt(filterFasilStart);
+    const endInt   = periodeToInt(filterFasilEnd);
+
     return allFasil
+      .filter(fasil => filterFasilWilayah === 'Semua' || fasil.wilayah === filterFasilWilayah)
       .map(fasil => {
-        // 1. Laporan Mandiri (Self-Report)
+        // 1. Laporan Mandiri (Self-Report) — dalam range periode filter
         const srResponses = allResSRFasil.filter(
-          r => r.id_fasil === fasil.id && r.bulan_laporan === periodeFasil
+          r => r.id_fasil === fasil.id &&
+               periodeToInt(r.bulan_laporan) >= startInt &&
+               periodeToInt(r.bulan_laporan) <= endInt
         );
         const latestSR = srResponses.length > 0 ? srResponses[srResponses.length - 1] : null;
 
@@ -358,7 +471,7 @@ export default function AdminClient({
         };
       })
       .sort((a, b) => b.completion_rate - a.completion_rate || b.avg_skor - a.avg_skor);
-  }, [allFasil, allResSRFasil, allResFasil, allPM, periodeAktif, periodeFasil]);
+  }, [allFasil, allResSRFasil, allResFasil, allPM, periodeAktif, periodeFasil, filterFasilWilayah, filterFasilStart, filterFasilEnd]);
 
   const totalFasil        = fasilData.length;
   const fasilSudahLapor   = fasilData.filter(f => f.sudah_lapor).length;
@@ -376,7 +489,7 @@ export default function AdminClient({
       {/* === TAB NAVIGASI UTAMA === */}
       <div className="flex gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-200 w-fit">
         <button
-          onClick={() => setActiveTab('etoser')}
+          onClick={() => switchTab('etoser')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             activeTab === 'etoser' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
           }`}
@@ -384,12 +497,28 @@ export default function AdminClient({
           <Users className="w-4 h-4" /> Monitoring Etoser
         </button>
         <button
-          onClick={() => setActiveTab('fasil')}
+          onClick={() => switchTab('fasil')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             activeTab === 'fasil' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
           }`}
         >
           <ClipboardList className="w-4 h-4" /> Kinerja Fasil
+        </button>
+        <button
+          onClick={() => switchTab('broadcast')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'broadcast' ? 'bg-green-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <Mail className="w-4 h-4" /> Broadcast Email
+        </button>
+        <button
+          onClick={() => switchTab('absensi')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'absensi' ? 'bg-orange-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          <CalendarCheck className="w-4 h-4" /> Absensi Pembinaan
         </button>
       </div>
 
@@ -543,7 +672,15 @@ export default function AdminClient({
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-gray-900 text-lg">Detail Data Etoser</h3>
-              <span className="text-xs font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">{filteredData.length} PM · Skor Maks: 4.00</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">{filteredData.length} PM · Skor Maks: 4.00</span>
+                <button
+                  onClick={exportDataEtoserToExcel}
+                  className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Excel
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -631,12 +768,42 @@ export default function AdminClient({
       {/* ================================================================= */}
       {activeTab === 'fasil' && (
         <>
-          {/* Info periode */}
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-sm font-bold px-4 py-2 rounded-xl">
-              Periode Laporan Fasil: <span className="text-indigo-900">{formatPeriode(periodeFasil)}</span>
+          {/* PANEL FILTER FASIL */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+            <div className="flex items-center gap-2 font-bold text-gray-800 mb-4">
+              <Filter className="w-5 h-5 text-indigo-600"/> Filter Data
             </div>
-            <p className="text-xs text-gray-400 font-medium">Window pengisian: tgl 1–10 setiap bulan</p>
+            <div className="flex flex-col md:flex-row gap-3 flex-wrap">
+              <select
+                className="w-full md:w-48 px-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900 shadow-sm cursor-pointer"
+                value={filterFasilWilayah} onChange={e => setFilterFasilWilayah(e.target.value)}
+              >
+                {listWilayahFasil.map(w => <option key={w} value={w}>{w === 'Semua' ? 'Semua Wilayah' : w}</option>)}
+              </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Dari</span>
+                <select
+                  className="px-3 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900 shadow-sm cursor-pointer"
+                  value={filterFasilStart} onChange={e => {
+                    setFilterFasilStart(e.target.value);
+                    if (periodeToInt(e.target.value) > periodeToInt(filterFasilEnd)) setFilterFasilEnd(e.target.value);
+                  }}
+                >
+                  {periodeOptionsFasil.map(p => <option key={p} value={p}>{formatPeriode(p)}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-500 whitespace-nowrap">Sampai</span>
+                <select
+                  className="px-3 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-gray-900 shadow-sm cursor-pointer"
+                  value={filterFasilEnd} onChange={e => setFilterFasilEnd(e.target.value)}
+                >
+                  {periodeOptionsFasil.filter(p => periodeToInt(p) >= periodeToInt(filterFasilStart)).map(p => (
+                    <option key={p} value={p}>{formatPeriode(p)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* 3 WIDGET FASIL */}
@@ -708,7 +875,7 @@ export default function AdminClient({
               </div>
             ) : (
               <div className="h-48 flex items-center justify-center text-gray-400 text-sm font-medium">
-                Belum ada Fasil yang mengisi laporan untuk periode {formatPeriode(periodeFasil)}.
+                Belum ada Fasil yang mengisi laporan untuk periode yang dipilih.
               </div>
             )}
           </div>
@@ -720,9 +887,17 @@ export default function AdminClient({
                 <Medal className="w-5 h-5 text-indigo-600"/>
                 <h3 className="font-bold text-gray-900 text-lg">Leaderboard Kinerja Fasil</h3>
               </div>
-              <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">
-                {totalFasil} Fasil · Periode {formatPeriode(periodeFasil)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">
+                  {totalFasil} Fasil · {filterFasilStart === filterFasilEnd ? formatPeriode(filterFasilEnd) : `${formatPeriode(filterFasilStart)} – ${formatPeriode(filterFasilEnd)}`}
+                </span>
+                <button
+                  onClick={exportLeaderboardFasilToExcel}
+                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Excel
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -1029,13 +1204,31 @@ export default function AdminClient({
         </div>
       )}
 
+      {/* ================================================================= */}
+      {/* TAB 3: BROADCAST EMAIL                                            */}
+      {/* ================================================================= */}
+      {activeTab === 'broadcast' && <BroadcastEmailTab />}
+
+      {/* ================================================================= */}
+      {/* TAB 4: ABSENSI PEMBINAAN                                           */}
+      {/* ================================================================= */}
+      {activeTab === 'absensi' && <AbsensiPembinaanTab initialAgendas={agendas} />}
+
       {/* 3. Modal List Sanksi */}
       {showSanksiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-in zoom-in-95 flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-600 shadow-lg">
               <h3 className="text-2xl font-black text-white">Daftar Penerima Sanksi</h3>
-              <button onClick={() => setShowSanksiModal(false)} className="text-white/70 hover:text-white font-bold p-2 hover:bg-white/10 rounded-xl">Close ✕</button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportSanksiToExcel}
+                  className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-2 rounded-xl text-sm transition-colors border border-white/30"
+                >
+                  <Download className="w-4 h-4" /> Export Excel
+                </button>
+                <button onClick={() => setShowSanksiModal(false)} className="text-white/70 hover:text-white font-bold p-2 hover:bg-white/10 rounded-xl">Close ✕</button>
+              </div>
             </div>
             <div className="p-0 overflow-y-auto flex-1">
               <table className="w-full text-left text-sm">
@@ -1044,7 +1237,8 @@ export default function AdminClient({
                     <th className="px-6 py-4">Nama PM</th>
                     <th className="px-6 py-4">Wilayah / Angk.</th>
                     <th className="px-6 py-4 text-center">Poin</th>
-                    <th className="px-6 py-4">Keterangan</th>
+                    <th className="px-6 py-4">Rekomendasi / Keterangan</th>
+                    <th className="px-6 py-4">Daftar Pelanggaran</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-900 font-medium">
@@ -1057,6 +1251,13 @@ export default function AdminClient({
                       <td className="px-6 py-4 font-bold text-gray-600">{d.wilayah}<br/><span className="text-xs font-medium">Angkatan {d.angkatan}</span></td>
                       <td className="px-6 py-4 text-center font-black text-red-600 text-xl">{d.total_poin}</td>
                       <td className="px-6 py-4 text-xs font-black text-red-700 bg-red-50/50">{d.rekomendasi}</td>
+                      <td className="px-6 py-4 text-xs text-gray-600 max-w-[200px]">
+                        {d.detail_pelanggaran
+                          ? d.detail_pelanggaran.split(',').map((p, i) => (
+                              <span key={i} className="block mb-0.5">• {p.trim()}</span>
+                            ))
+                          : <span className="text-gray-400">—</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

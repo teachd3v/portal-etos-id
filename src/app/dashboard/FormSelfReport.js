@@ -171,19 +171,7 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
                 </div>
               </div>
 
-              {evaluationData?.sanksi_poin > 0 && (
-                <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 mb-6">
-                  <div className="flex items-start gap-4">
-                    <AlertTriangle className="w-6 h-6 text-red-600" />
-                    <div>
-                      <h3 className="font-black text-red-800 text-lg">Peringatan Sanksi Aktif!</h3>
-                      <p className="text-red-700 font-medium text-sm">
-                        Kamu memiliki sanksi sebesar {evaluationData.sanksi_poin} poin. Poin ini akan dikoordinasikan untuk pengurangan uang saku.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="bg-white border rounded-xl p-6 shadow-sm">
@@ -258,11 +246,7 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
                              <span className={`px-4 py-1.5 rounded-full border font-bold text-xs backdrop-blur-md ${badgeColor}`}>
                                {evaluationData.rekomendasi}
                              </span>
-                             {evaluationData.sanksi_poin > 0 && (
-                               <span className="bg-white text-red-600 px-4 py-1.5 rounded-full font-black text-xs shadow-sm flex items-center gap-1.5">
-                                 <AlertTriangle className="w-3.5 h-3.5" /> {evaluationData.sanksi_poin} Poin Sanksi
-                               </span>
-                             )}
+
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
@@ -273,22 +257,7 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
                         </div>
                       </div>
 
-                      {/* Detail Pelanggaran Section (Inside Card) */}
-                      {evaluationData.sanksi_poin > 0 && evaluationData.detail_pelanggaran && (
-                        <div className="mt-8 pt-6 border-t border-white/20">
-                          <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-3 flex items-center gap-2">
-                             Catatan Pelanggaran & Evaluasi Fasil
-                          </p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {evaluationData.detail_pelanggaran.split(',').map((p, i) => (
-                              <div key={i} className="bg-black/10 backdrop-blur-md border border-white/10 p-3 rounded-xl flex items-start gap-3">
-                                <div className="w-1.5 h-1.5 rounded-full bg-white/50 mt-1.5 shrink-0" />
-                                <span className="text-xs font-bold leading-relaxed">{p.trim()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+
                     </div>
                   </div>
                 );

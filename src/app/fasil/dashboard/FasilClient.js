@@ -80,9 +80,6 @@ export default function FasilClient({
 
   const handleRekomendasiChange = (val) => {
     setRekomendasi(val);
-    if (val !== 'Unacceptable (Sangat Kurang)') {
-      setListSanksi([]);
-    }
   };
 
   // --- Handler Sanksi ---
@@ -109,17 +106,13 @@ export default function FasilClient({
   };
 
   const totalPoin = listSanksi.reduce((sum, s) => sum + (s.poin || 0), 0);
-  const isUnacceptable = rekomendasi === 'Unacceptable (Sangat Kurang)';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (Object.keys(jawaban).length < 4 || !rekomendasi) {
       alert('Harap isi semua 4 indikator skor dan pilih Kesimpulan Rekomendasi!'); return;
     }
-    if (isUnacceptable && listSanksi.length === 0) {
-      alert('Harap tambahkan minimal 1 keterangan sanksi untuk rekomendasi Unacceptable!'); return;
-    }
-    if (isUnacceptable && listSanksi.some(s => !s.kategori || !s.detail)) {
+    if (listSanksi.some(s => !s.kategori || !s.detail)) {
       alert('Harap lengkapi semua data sanksi (kategori & detail pelanggaran)!'); return;
     }
 
@@ -133,8 +126,8 @@ export default function FasilClient({
           jawaban,
           rekomendasi,
           catatan_kualitatif: catatanKualitatif,
-          sanksi: isUnacceptable ? listSanksi : [],
-          total_poin: isUnacceptable ? totalPoin : 0,
+          sanksi: listSanksi,
+          total_poin: totalPoin,
           periode: periodeFasil,
         })
       });
@@ -427,13 +420,13 @@ export default function FasilClient({
                     <option value="Outstanding (Luar Biasa)">Outstanding (Luar Biasa)</option>
                   </select>
 
-                  {/* --- BAGIAN SANKSI (hanya muncul jika Unacceptable) --- */}
-                  {isUnacceptable && (
+                  {/* --- BAGIAN SANKSI (muncul untuk semua opsi rekomendasi) --- */}
+                  {rekomendasi && (
                     <div className="mb-8 p-5 bg-red-50 border border-red-200 rounded-2xl animate-in fade-in slide-in-from-top-4">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="w-5 h-5 text-red-600" />
-                          <h3 className="font-bold text-red-800 text-base">Keterangan Sanksi <span className="text-red-500">(Wajib)</span></h3>
+                          <h3 className="font-bold text-red-800 text-base">Keterangan Sanksi <span className="text-gray-400 font-medium text-sm">(Opsional)</span></h3>
                         </div>
                         <button
                           type="button" onClick={tambahSanksi}
@@ -445,7 +438,7 @@ export default function FasilClient({
 
                       {listSanksi.length === 0 && (
                         <p className="text-red-600 text-sm font-medium text-center py-5 bg-red-100/50 rounded-xl border border-red-200 border-dashed">
-                          Klik &quot;Tambah Sanksi&quot; untuk mencatat pelanggaran. Minimal 1 sanksi wajib ditambahkan.
+                          Klik &quot;Tambah Sanksi&quot; jika PM melakukan pelanggaran (opsional untuk semua rekomendasi).
                         </p>
                       )}
 
