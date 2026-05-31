@@ -62,25 +62,38 @@ export default async function DashboardFasil() {
   try {
     const sheetResFasil = await getGoogleSheet('Review_Fasil');
     const rowsResFasil = await sheetResFasil.getRows();
-    const [periodeMonth, periodeYear] = periode.split('-'); // "03", "2026"
 
     rowsResFasil.forEach(row => {
       if (row.get('ID_Fasil') !== user.id) return;
 
       // 1. Cek via kolom Bulan_Laporan (Cara baru yang akurat lintas bulan)
       const bl = row.get('Bulan_Laporan');
-      if (bl === periode) {
-        evaluatedPMIds.add(row.get('ID_Etoser_Dinilai'));
-        return;
+      if (bl) {
+        if (bl === periode) {
+          evaluatedPMIds.add(row.get('ID_Etoser_Dinilai'));
+        }
+        return; // Jika sudah ada Bulan_Laporan, tidak perlu fallback ke Timestamp
       }
 
-      // 2. Fallback via Timestamp (Untuk data lama yang belum punya kolom Bulan_Laporan)
+      // 2. Fallback via Timestamp (HANYA untuk data lama yang belum punya kolom Bulan_Laporan)
       const ts = row.get('Timestamp') || '';
       const match = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (match) {
-        const tsMonth = match[2].padStart(2, '0'); 
-        const tsYear = match[3];                   
-        if (tsMonth === periodeMonth && tsYear === periodeYear) {
+        const tsDay = parseInt(match[1], 10);
+        let tsMonthNum = parseInt(match[2], 10);
+        let tsYearNum = parseInt(match[3], 10);
+
+        // Koreksi periode berdasarkan jendela submit (tgl 1-7 adalah untuk bulan sebelumnya)
+        if (tsDay <= 7) {
+          tsMonthNum -= 1;
+          if (tsMonthNum === 0) {
+            tsMonthNum = 12;
+            tsYearNum -= 1;
+          }
+        }
+
+        const calculatedPeriodeStr = `${String(tsMonthNum).padStart(2, '0')}-${tsYearNum}`;
+        if (calculatedPeriodeStr === periode) {
           evaluatedPMIds.add(row.get('ID_Etoser_Dinilai'));
         }
       }
