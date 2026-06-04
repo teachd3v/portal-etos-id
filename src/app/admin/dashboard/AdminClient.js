@@ -233,6 +233,7 @@ export default function AdminClient({
         fasil_int, fasil_prof, fasil_kontributif, fasil_trans,
         total_int, total_prof, total_kontributif, total_trans,
         ipk_pembinaan,
+        indikator_scores: latestPM?.indikator_scores || {},
         feedback_admin: latestPM?.feedback_admin || '', // Ambil dari Response_PM (koleksi Official_Feedback)
         all_pm_responses: pmResponses,
         all_fasil_responses: fasilResponses,
@@ -335,34 +336,51 @@ export default function AdminClient({
     const periodeLabel = filterStart === filterEnd
       ? formatPeriode(filterStart)
       : `${formatPeriode(filterStart)}-${formatPeriode(filterEnd)}`;
-    const rows = filteredData.map(d => ({
-      'ID': d.id,
-      'Nama': d.nama,
-      'Email': d.email || '-',
-      'Angkatan': d.angkatan,
-      'Wilayah': d.wilayah,
-      'Tahun Pembinaan': d.tahun_pembinaan,
-      'Status Self-Report': d.status_lapor_pm ? 'Sudah Lapor' : 'Belum Lapor',
-      'Status Dinilai Fasil': d.status_dinilai_fasil ? 'Sudah Dinilai' : 'Belum Dinilai',
-      'Skor PM - Integritas': d.pm_int || '-',
-      'Skor PM - Profesional': d.pm_prof || '-',
-      'Skor PM - Kontributif': d.pm_kont || '-',
-      'Skor PM - Transformatif': d.pm_trans || '-',
-      'Skor Fasil - Integritas': d.fasil_int || '-',
-      'Skor Fasil - Profesional': d.fasil_prof || '-',
-      'Skor Fasil - Kontributif': d.fasil_kontributif || '-',
-      'Skor Fasil - Transformatif': d.fasil_trans || '-',
-      'Total Integritas': d.total_int || '-',
-      'Total Profesional': d.total_prof || '-',
-      'Total Kontributif': d.total_kontributif || '-',
-      'Total Transformatif': d.total_trans || '-',
-      'IPK Pembinaan': d.ipk_pembinaan || '-',
-      'Rekomendasi': d.rekomendasi,
-      'Kena Sanksi': d.kena_sanksi ? 'Ya' : 'Tidak',
-      'Total Poin Sanksi': d.total_poin || 0,
-      'Detail Pelanggaran': d.detail_pelanggaran || '-',
-      'Feedback Admin': d.feedback_admin || '-',
-    }));
+    
+    // Ambil daftar indikator unik dari instrumen
+    const indicators = [...new Set(instrumentPM.map(i => i.indikator))].filter(Boolean);
+
+    const rows = filteredData.map(d => {
+      const row = {
+        'ID': d.id,
+        'Nama': d.nama,
+        'Email': d.email || '-',
+        'Angkatan': d.angkatan,
+        'Wilayah': d.wilayah,
+        'Tahun Pembinaan': d.tahun_pembinaan,
+        'Status Self-Report': d.status_lapor_pm ? 'Sudah Lapor' : 'Belum Lapor',
+        'Status Dinilai Fasil': d.status_dinilai_fasil ? 'Sudah Dinilai' : 'Belum Dinilai',
+        'Skor PM - Integritas': d.pm_int || '-',
+        'Skor PM - Profesional': d.pm_prof || '-',
+        'Skor PM - Kontributif': d.pm_kont || '-',
+        'Skor PM - Transformatif': d.pm_trans || '-',
+      };
+
+      // Tambahkan Kolom Indikator secara Dinamis
+      indicators.forEach(ind => {
+        row[`Skor Indikator - ${ind}`] = d.indikator_scores?.[ind] || '-';
+      });
+
+      // Tambahkan sisa kolom evaluasi
+      Object.assign(row, {
+        'Skor Fasil - Integritas': d.fasil_int || '-',
+        'Skor Fasil - Profesional': d.fasil_prof || '-',
+        'Skor Fasil - Kontributif': d.fasil_kontributif || '-',
+        'Skor Fasil - Transformatif': d.fasil_trans || '-',
+        'Total Integritas': d.total_int || '-',
+        'Total Profesional': d.total_prof || '-',
+        'Total Kontributif': d.total_kontributif || '-',
+        'Total Transformatif': d.total_trans || '-',
+        'IPK Pembinaan': d.ipk_pembinaan || '-',
+        'Rekomendasi': d.rekomendasi,
+        'Kena Sanksi': d.kena_sanksi ? 'Ya' : 'Tidak',
+        'Total Poin Sanksi': d.total_poin || 0,
+        'Detail Pelanggaran': d.detail_pelanggaran || '-',
+        'Feedback Admin': d.feedback_admin || '-',
+      });
+
+      return row;
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Data Etoser');

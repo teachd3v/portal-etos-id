@@ -180,10 +180,15 @@ export default function FormSelfReport({ instrumen, user, tahunPembinaan, period
                     const perluValidasi = item.validasi !== '-' && item.validasi !== '' && skorSaatIni > 1;
                     return (
                       <div key={item.kode} className="mb-8 p-5 bg-gray-50 border border-gray-100 rounded-2xl hover:shadow-md transition-all">
-                        <div className="flex gap-3 mb-3">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           <span className="bg-green-600 text-white px-2.5 py-1 rounded text-xs font-bold h-fit shadow-sm">{item.kode}</span>
-                          <p className="font-bold text-gray-800 text-sm md:text-base">{item.item}</p>
+                          {item.indikator && (
+                            <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider h-fit border border-blue-200">
+                              {item.indikator}
+                            </span>
+                          )}
                         </div>
+                        <p className="font-bold text-gray-800 text-sm md:text-base mb-3">{item.item}</p>
                         <StarRating kode={item.kode} jenisSkala={item.jenisSkala} currentValue={skorSaatIni} onChange={handleSkorChange} />
                         {perluValidasi && (
                           <div className="mt-5 pt-4 border-t border-gray-200">

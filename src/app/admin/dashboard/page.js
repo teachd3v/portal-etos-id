@@ -133,24 +133,43 @@ export default async function AdminDashboard() {
     'Transformatif': [],
   };
   
+  const pmIndikatorToCodes = {};
+  
   rowsInstPM.forEach(r => {
     const v = r.get('Variabel');
     const k = r.get('Kode');
+    const ind = r.get('Indikator');
+
     if (pmVarToCodes[v]) {
       pmVarToCodes[v].push(`${k}_Skor`);
+    }
+
+    if (ind) {
+      if (!pmIndikatorToCodes[ind]) pmIndikatorToCodes[ind] = [];
+      pmIndikatorToCodes[ind].push(`${k}_Skor`);
     }
   });
 
   // Re-map allResPM dengan variabel dinamis & trim ID
-  const allResPM = rowsResPM.map(row => ({
-    id_etoser: (row.get('ID_Etoser') || '').trim(),
-    bulan_laporan: (row.get('Bulan_Laporan') || '').trim(),
-    pm_int:    getAvg(row, pmVarToCodes['Integritas']),
-    pm_prof:   getAvg(row, pmVarToCodes['Profesional']),
-    pm_kont:   getAvg(row, pmVarToCodes['Kontributif']),
-    pm_trans:  getAvg(row, pmVarToCodes['Transformatif']),
-    feedback_admin: row.get('Official_Feedback') || '',
-  }));
+  const allResPM = rowsResPM.map(row => {
+    const res = {
+      id_etoser: (row.get('ID_Etoser') || '').trim(),
+      bulan_laporan: (row.get('Bulan_Laporan') || '').trim(),
+      pm_int:    getAvg(row, pmVarToCodes['Integritas']),
+      pm_prof:   getAvg(row, pmVarToCodes['Profesional']),
+      pm_kont:   getAvg(row, pmVarToCodes['Kontributif']),
+      pm_trans:  getAvg(row, pmVarToCodes['Transformatif']),
+      feedback_admin: row.get('Official_Feedback') || '',
+      indikator_scores: {},
+    };
+
+    // Hitung rata-rata per indikator
+    Object.keys(pmIndikatorToCodes).forEach(ind => {
+      res.indikator_scores[ind] = getAvg(row, pmIndikatorToCodes[ind]);
+    });
+
+    return res;
+  });
 
   // 4. Daftar periode unik, pastikan menyertakan periodeAktif agar filter tidak kosong
   const periodSet = new Set(allResPM.map(r => r.bulan_laporan));
@@ -169,6 +188,7 @@ export default async function AdminDashboard() {
   const instrumentPM = rowsInstPM
     .map(r => ({
       kode: r.get('Kode'),
+      indikator: r.get('Indikator') || '',
       item: r.get('Item_Pernyataan'),
       tahun: r.get('Tahun'),
     }))

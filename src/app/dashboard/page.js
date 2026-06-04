@@ -38,6 +38,7 @@ export default async function DashboardPM() {
       .map(row => ({
         variabel: row.get('Variabel'),
         kode: row.get('Kode'),
+        indikator: row.get('Indikator') || '',
         jenisSkala: row.get('Jenis_Skala'),
         item: row.get('Item_Pernyataan'),
         validasi: row.get('Pertanyaan_Validasi') || null
