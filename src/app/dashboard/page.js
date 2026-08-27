@@ -48,16 +48,13 @@ export default async function DashboardPM() {
   let statusForm = periodeStatus;
   let pesanStatus = periodePesan;
 
-  // 4. ATURAN KHUSUS (ALUMNI, CAMABA, & TAHUN 4)
+  // 4. ATURAN KHUSUS (ALUMNI & CAMABA)
   if (tahunPembinaanValid > 4) {
     statusForm = 'ALUMNI';
     pesanStatus = 'Selamat! Kamu telah menyelesaikan 4 tahun masa pembinaan Etos ID. Pengisian laporan sudah tidak diperlukan.';
   } else if (isNaN(tahunPembinaanValid) || tahunPembinaanValid < 1) {
     statusForm = 'ERROR';
     pesanStatus = 'Tahun pembinaanmu belum diatur oleh admin. Silakan hubungi Fasilitator.';
-  } else if (tahunPembinaanValid === 4 && bulanLaporanInt === 8) {
-    statusForm = 'FINISHED';
-    pesanStatus = 'Laporan bulanan terakhirmu di Tahun ke-4 adalah laporan bulan Juli. Selamat menikmati masa purnamu!';
   }
 
   let adminFeedback = '';
